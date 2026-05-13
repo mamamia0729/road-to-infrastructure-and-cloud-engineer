@@ -1,0 +1,1967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud & Systems Engineer - Skill Path</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0a0a0a;
+  --fg: #e0e0e0;
+  --dim: #666;
+  --border: #333;
+  --accent: #fff;
+  --complete: #888;
+}
+body {
+  font-family: 'Courier New', monospace;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+a { color: var(--fg); }
+
+/* Header */
+.header {
+  border-bottom: 1px solid var(--border);
+  padding: 20px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.header h1 { font-size: 16px; font-weight: normal; }
+.header h1 span { color: var(--dim); }
+.stats {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: var(--dim);
+}
+.stats .num { color: var(--accent); }
+
+/* Search */
+.search-bar {
+  padding: 15px 30px;
+  border-bottom: 1px solid var(--border);
+}
+.search-bar input {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  width: 100%;
+  max-width: 400px;
+}
+.search-bar input:focus { outline: none; border-color: var(--dim); }
+.search-bar input::placeholder { color: var(--dim); }
+
+/* Layout */
+.container {
+  display: flex;
+  min-height: calc(100vh - 120px);
+}
+
+/* Sidebar */
+.sidebar {
+  width: 280px;
+  border-right: 1px solid var(--border);
+  padding: 20px 0;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.domain-item {
+  padding: 10px 20px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all 0.1s;
+}
+.domain-item:hover { background: #151515; }
+.domain-item.active { border-left-color: var(--fg); background: #151515; }
+.domain-item .domain-name { font-size: 13px; margin-bottom: 4px; }
+.domain-item .domain-progress {
+  font-size: 11px;
+  color: var(--dim);
+}
+.progress-bar {
+  height: 2px;
+  background: var(--border);
+  margin-top: 6px;
+  position: relative;
+}
+.progress-bar .fill {
+  height: 100%;
+  background: var(--fg);
+  transition: width 0.3s;
+}
+
+/* Main content */
+.main {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  max-width: 900px;
+}
+.domain-header {
+  margin-bottom: 30px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border);
+}
+.domain-header h2 { font-size: 18px; font-weight: normal; margin-bottom: 5px; }
+.domain-header p { font-size: 13px; color: var(--dim); }
+
+/* Topic nodes */
+.topic {
+  margin-bottom: 2px;
+  border: 1px solid var(--border);
+}
+.topic.completed { border-color: var(--complete); }
+.topic.completed .topic-header { color: var(--dim); }
+.topic-header {
+  padding: 12px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.topic-header:hover { background: #151515; }
+.topic-check {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+.topic-check.checked { border-color: var(--fg); }
+.topic-check.checked::after { content: 'x'; }
+.topic-title { flex: 1; }
+.topic-expand {
+  color: var(--dim);
+  font-size: 12px;
+}
+.topic-content {
+  display: none;
+  padding: 0 16px 16px 44px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.topic-content.open { display: block; }
+.topic-content h4 {
+  color: var(--accent);
+  margin: 16px 0 8px 0;
+  font-size: 13px;
+  font-weight: normal;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.topic-content p { margin-bottom: 10px; color: var(--fg); }
+.topic-content ul { margin: 0 0 10px 20px; }
+.topic-content li { margin-bottom: 4px; }
+.topic-content code {
+  background: #1a1a1a;
+  padding: 2px 6px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+}
+.topic-content pre {
+  background: #111;
+  border: 1px solid var(--border);
+  padding: 12px;
+  margin: 10px 0;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.topic-content .interview-tip {
+  border-left: 2px solid var(--dim);
+  padding-left: 12px;
+  margin: 12px 0;
+  color: var(--dim);
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container { flex-direction: column; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+  .main { padding: 20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>CLOUD & SYSTEMS ENGINEER <span>// skill path</span></h1>
+  <div class="stats">
+    <span><span class="num" id="stat-complete">0</span> / <span id="stat-total">0</span> completed</span>
+    <span><span class="num" id="stat-percent">0</span>% mastered</span>
+  </div>
+</div>
+
+<div class="search-bar">
+  <input type="text" id="search" placeholder="> search topics..." />
+</div>
+
+<div class="container">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main" id="main"></div>
+</div>
+
+<script>
+const DATA = [
+{
+  id: 'azure',
+  name: '01 Azure Infrastructure',
+  desc: 'Cloud platform - compute, networking, storage, governance',
+  topics: [
+    {
+      id: 'azure-hierarchy',
+      title: 'Azure Resource Hierarchy',
+      content: `
+<h4>What it is</h4>
+<p>Azure organizes everything in a strict hierarchy that controls billing, access, and policy inheritance.</p>
+
+<h4>The hierarchy</h4>
+<pre>Tenant (Entra ID)
+  Management Groups (optional, for policy at scale)
+    Subscriptions (billing boundary)
+      Resource Groups (logical container)
+        Resources (VMs, VNets, storage, etc.)</pre>
+
+<h4>Why it matters</h4>
+<ul>
+<li>RBAC (permissions) inherit downward - assign at subscription, applies to all RGs below</li>
+<li>Policies inherit downward - enforce naming conventions, allowed regions at management group level</li>
+<li>Subscriptions are the billing boundary - separate prod/dev for cost tracking</li>
+<li>Resource Groups are the lifecycle boundary - delete RG = delete everything inside</li>
+</ul>
+
+<h4>Real-world pattern</h4>
+<pre>Tenant: contoso.onmicrosoft.com
+  MG: Production
+    Sub: Prod-Enterprise (IT infra)
+      RG: rg-prod-identity (AD Connect, DCs)
+      RG: rg-prod-networking (VNets, firewalls)
+      RG: rg-prod-avd (virtual desktops)
+    Sub: Prod-BusinessApps
+      RG: rg-prod-erp
+  MG: Non-Production
+    Sub: Dev-Test
+      RG: rg-dev-sandbox</pre>
+
+<h4>Key commands</h4>
+<pre>az account list --output table
+az group list --output table
+az group create --name rg-lab --location southcentralus
+az group delete --name rg-lab --yes</pre>
+
+<div class="interview-tip">Interview tip: "We organize resources by lifecycle and ownership. Each business unit gets their own resource group with Contributor access scoped only to that RG. This follows least privilege."</div>
+`
+    },
+    {
+      id: 'azure-networking',
+      title: 'Virtual Networks (VNet) & Subnets',
+      content: `
+<h4>What it is</h4>
+<p>VNets are your private network in Azure. Nothing can communicate unless you explicitly allow it. Think of it as your office LAN but in the cloud.</p>
+
+<h4>Key concepts</h4>
+<ul>
+<li><strong>VNet</strong> - address space (e.g., 10.0.0.0/16 = 65,536 IPs)</li>
+<li><strong>Subnet</strong> - segment within VNet (e.g., 10.0.1.0/24 = 256 IPs)</li>
+<li><strong>NSG</strong> - Network Security Group, firewall rules at subnet or NIC level</li>
+<li><strong>Peering</strong> - connect two VNets (non-transitive by default)</li>
+<li><strong>Service Endpoints</strong> - private path to Azure PaaS (Storage, SQL)</li>
+<li><strong>Private Endpoints</strong> - private IP for Azure PaaS in your VNet</li>
+</ul>
+
+<h4>Subnet design pattern (enterprise)</h4>
+<pre>VNet: 10.0.0.0/16
+  10.0.1.0/24  - GatewaySubnet (VPN/ExpressRoute)
+  10.0.2.0/24  - AzureFirewallSubnet
+  10.0.3.0/24  - servers-subnet (DCs, AD Connect)
+  10.0.4.0/24  - avd-subnet (session hosts)
+  10.0.5.0/24  - db-subnet (SQL, storage)
+  10.0.10.0/24 - AzureBastionSubnet</pre>
+
+<h4>NSG rules (evaluated by priority, lowest number wins)</h4>
+<pre>Priority  Direction  Action  Source       Dest         Port
+100       Inbound    Allow   10.0.0.0/16  10.0.3.0/24  3389  (RDP from VNet)
+200       Inbound    Allow   10.0.0.0/16  10.0.3.0/24  443   (HTTPS)
+4096      Inbound    Deny    *            *            *     (default deny all)</pre>
+
+<h4>Hybrid connectivity</h4>
+<ul>
+<li><strong>Site-to-Site VPN</strong> - encrypted tunnel over internet, cheaper, up to 1.25 Gbps</li>
+<li><strong>ExpressRoute</strong> - private connection via provider, no internet, up to 100 Gbps, expensive</li>
+<li><strong>Point-to-Site VPN</strong> - individual client connections (remote workers)</li>
+</ul>
+
+<div class="interview-tip">Interview tip: "For the domain migration, I'd ensure the Azure VNet has connectivity to on-prem via site-to-site VPN or ExpressRoute, with AD Connect servers in a dedicated subnet with NSG rules allowing only ports 443 outbound to Azure and 389/636 inbound from domain controllers."</div>
+`
+    },
+    {
+      id: 'azure-compute',
+      title: 'Virtual Machines & Availability',
+      content: `
+<h4>What it is</h4>
+<p>Azure VMs are IaaS - you manage the OS up, Azure manages hardware down. Critical for hybrid environments where you run AD Connect, domain controllers, or file servers in Azure.</p>
+
+<h4>VM sizing pattern</h4>
+<pre>Series  Use Case              Example
+B       Burstable, light loads  B2s (2 vCPU, 4GB) - dev/test
+D       General purpose         D2as_v5 (2 vCPU, 8GB) - AD Connect
+E       Memory optimized        E4as_v5 (4 vCPU, 32GB) - SQL
+F       Compute optimized       F4s_v2 - batch processing</pre>
+
+<h4>Availability concepts</h4>
+<ul>
+<li><strong>Availability Zones</strong> - physically separate datacenters in a region (Zone 1, 2, 3). 99.99% SLA.</li>
+<li><strong>Availability Sets</strong> - fault domains + update domains in one datacenter. 99.95% SLA.</li>
+<li><strong>Fault Domain</strong> - shared power/network rack</li>
+<li><strong>Update Domain</strong> - reboot groups during maintenance</li>
+</ul>
+
+<h4>For this role specifically</h4>
+<ul>
+<li>AD Connect server: single VM is fine (staging mode server is your HA)</li>
+<li>Domain Controllers in Azure: 2 VMs across 2 Availability Zones</li>
+<li>AVD session hosts: scale sets across zones</li>
+</ul>
+
+<h4>Key commands</h4>
+<pre>az vm create --resource-group rg --name dc01 \\
+  --image Win2022Datacenter --size Standard_D2as_v5 \\
+  --vnet-name prod-vnet --subnet servers-subnet \\
+  --zone 1 --admin-username azadmin
+
+az vm list --resource-group rg --output table
+az vm get-instance-view --name dc01 --resource-group rg \\
+  --query "instanceView.statuses[1].displayStatus"</pre>
+
+<div class="interview-tip">Interview tip: "For DCs in Azure, I'd deploy two VMs across separate availability zones for 99.99% SLA. They'd be in the servers subnet with NSG rules scoped to AD ports only. No public IPs - access via Bastion or VPN."</div>
+`
+    },
+    {
+      id: 'azure-storage',
+      title: 'Storage Accounts & Types',
+      content: `
+<h4>What it is</h4>
+<p>Azure Storage is a multi-purpose service for blobs, files, queues, and tables. For this role, you'll mostly use Azure Files (SMB shares) and Blob storage (backups, Terraform state).</p>
+
+<h4>Storage types</h4>
+<ul>
+<li><strong>Blob Storage</strong> - unstructured data (backups, images, logs). Tiers: Hot/Cool/Archive.</li>
+<li><strong>Azure Files</strong> - SMB file shares in the cloud. Mount as network drive. Used for FSLogix (AVD profiles).</li>
+<li><strong>Table Storage</strong> - NoSQL key-value (cheap, simple).</li>
+<li><strong>Queue Storage</strong> - messaging between services.</li>
+</ul>
+
+<h4>Relevant to this role</h4>
+<ul>
+<li>FSLogix profile containers on Azure Files (AVD user profiles)</li>
+<li>Terraform remote state in blob storage</li>
+<li>Backup vault for Azure Backup</li>
+<li>Storage for diagnostic logs</li>
+</ul>
+
+<h4>Redundancy options</h4>
+<pre>LRS  - 3 copies in one datacenter (cheapest)
+ZRS  - 3 copies across 3 zones (zone failure protection)
+GRS  - LRS + async copy to paired region
+GZRS - ZRS + async copy to paired region (best protection)</pre>
+
+<h4>Key commands</h4>
+<pre>az storage account create --name stprodfiles01 \\
+  --resource-group rg --location southcentralus \\
+  --sku Standard_ZRS --kind StorageV2
+
+az storage share create --name profiles \\
+  --account-name stprodfiles01 --quota 100</pre>
+
+<div class="interview-tip">Interview tip: "For AVD, I'd use Azure Files with ZRS redundancy for FSLogix profile containers. This gives users fast profile loads and zone-level resiliency for their desktop state."</div>
+`
+    },
+    {
+      id: 'azure-governance',
+      title: 'Azure Policy & RBAC',
+      content: `
+<h4>What it is</h4>
+<p>Governance = controlling what people can do and enforcing standards. Two tools: RBAC (who can do what) and Azure Policy (what's allowed to exist).</p>
+
+<h4>RBAC (Role-Based Access Control)</h4>
+<ul>
+<li><strong>Security Principal</strong> - user, group, service principal, managed identity</li>
+<li><strong>Role</strong> - collection of permissions (Owner, Contributor, Reader, custom)</li>
+<li><strong>Scope</strong> - where it applies (management group, subscription, RG, resource)</li>
+<li>Assignment = Principal + Role + Scope</li>
+</ul>
+
+<h4>Built-in roles to know</h4>
+<pre>Owner         - full access + can assign roles
+Contributor   - full access, CANNOT assign roles
+Reader        - view only
+User Access Admin - can only manage role assignments
+VM Contributor    - manage VMs only
+Network Contributor - manage networking only</pre>
+
+<h4>Azure Policy</h4>
+<ul>
+<li><strong>Policy Definition</strong> - the rule (e.g., "Allowed locations")</li>
+<li><strong>Policy Assignment</strong> - where the rule is enforced</li>
+<li><strong>Initiative</strong> - group of policies (e.g., "CIS Benchmark")</li>
+<li>Effects: Deny, Audit, Append, Modify, DeployIfNotExists</li>
+</ul>
+
+<h4>Common policies in enterprise</h4>
+<pre>- Allowed locations (restrict to US regions)
+- Require tags on resources (CostCenter, Owner, Environment)
+- Allowed VM SKUs (block expensive series)
+- Deny public IP creation
+- Enforce NSG on every subnet</pre>
+
+<div class="interview-tip">Interview tip: "I'd assign Contributor at the resource group level per team, Reader at the subscription level so they can see but not break other teams' resources. For the migration, I'd create a custom role that allows AD-related operations only."</div>
+`
+    },
+    {
+      id: 'azure-monitor',
+      title: 'Azure Monitor & Log Analytics',
+      content: `
+<h4>What it is</h4>
+<p>Azure Monitor collects metrics and logs from all Azure resources. Log Analytics workspace is where you query them with KQL (Kusto Query Language).</p>
+
+<h4>Components</h4>
+<ul>
+<li><strong>Metrics</strong> - numeric time-series (CPU %, memory, disk IOPS). Real-time, 93-day retention.</li>
+<li><strong>Logs</strong> - detailed records sent to Log Analytics. Query with KQL.</li>
+<li><strong>Alerts</strong> - trigger on metric threshold or log query result.</li>
+<li><strong>Workbooks</strong> - dashboards built from queries.</li>
+<li><strong>Diagnostic Settings</strong> - "send logs from this resource to Log Analytics"</li>
+</ul>
+
+<h4>KQL basics</h4>
+<pre>// Failed sign-ins in last 24h
+SigninLogs
+| where TimeGenerated > ago(24h)
+| where ResultType != "0"
+| summarize count() by UserPrincipalName
+| order by count_ desc
+
+// VM heartbeat missing (offline detection)
+Heartbeat
+| summarize LastHeartbeat = max(TimeGenerated) by Computer
+| where LastHeartbeat < ago(5m)</pre>
+
+<h4>What to monitor for this role</h4>
+<ul>
+<li>AD Connect sync errors (on-prem event logs forwarded)</li>
+<li>Sign-in failures and risky sign-ins</li>
+<li>VM availability (heartbeat)</li>
+<li>Entra ID audit log changes (new admins, CA policy changes)</li>
+</ul>
+
+<div class="interview-tip">Interview tip: "I'd set up alerts for AD Connect sync failures and any Conditional Access policy modifications. These are the two things that can silently break the environment if missed."</div>
+`
+    }
+  ]
+},
+{
+  id: 'identity',
+  name: '02 Entra ID & Identity',
+  desc: 'Azure AD, hybrid identity, authentication, Conditional Access',
+  topics: [
+    {
+      id: 'entra-fundamentals',
+      title: 'Entra ID vs On-Prem AD',
+      content: `
+<h4>What it is</h4>
+<p>Entra ID (formerly Azure AD) is Microsoft's cloud identity service. It is NOT "Active Directory in the cloud" - it's a completely different architecture.</p>
+
+<h4>Key differences</h4>
+<pre>Feature             On-Prem AD              Entra ID
+Protocol            LDAP, Kerberos          OAuth 2.0, SAML, OIDC
+Structure           Forests/Domains/OUs     Flat (tenant)
+Group Policy        Yes (GPO)               No (use Intune)
+Authentication      NTLM, Kerberos          Modern auth + tokens
+Query               LDAP queries            Microsoft Graph API
+Device management   Domain join + GPO       Entra join + Intune
+DNS                 AD-integrated DNS       Azure DNS (separate)</pre>
+
+<h4>Why both exist (hybrid)</h4>
+<p>Most enterprises can't go full cloud overnight. Legacy apps need Kerberos/LDAP. File servers need NTLM. So you run both and sync identities between them. That's hybrid identity.</p>
+
+<h4>Entra ID editions</h4>
+<pre>Free     - basic user/group management, SSO (10 apps)
+P1 (E3)  - Conditional Access, dynamic groups, SSPR writeback, app proxy
+P2 (E5)  - Identity Protection, PIM, access reviews, entitlement management</pre>
+
+<h4>Objects in Entra ID</h4>
+<ul>
+<li><strong>Users</strong> - cloud-only or synced from on-prem</li>
+<li><strong>Groups</strong> - security or M365, assigned or dynamic</li>
+<li><strong>Devices</strong> - Entra registered, Entra joined, hybrid Entra joined</li>
+<li><strong>App registrations</strong> - your apps that use Entra for auth</li>
+<li><strong>Enterprise apps</strong> - third-party apps (Salesforce, Zoom, etc.)</li>
+<li><strong>Service principals</strong> - identity for apps/services (automation)</li>
+</ul>
+
+<div class="interview-tip">Interview tip: "The key distinction is that AD uses Kerberos and LDAP for on-prem resources, while Entra ID uses modern protocols like OAuth and SAML for cloud resources. In a hybrid environment, AD Connect bridges them by syncing identities and optionally passwords."</div>
+`
+    },
+    {
+      id: 'entra-users-groups',
+      title: 'Users, Groups & Dynamic Membership',
+      content: `
+<h4>User types</h4>
+<ul>
+<li><strong>Cloud-only</strong> - created directly in Entra, no on-prem counterpart. Source: "Azure Active Directory"</li>
+<li><strong>Synced</strong> - created on-prem, synced via AD Connect. Source: "Windows Server AD". Managed on-prem.</li>
+<li><strong>Guest (B2B)</strong> - external user invited for collaboration. Limited by default.</li>
+</ul>
+
+<h4>Group types</h4>
+<pre>Type        Mail-enabled  Can contain             Use for
+Security    No            Users, groups, devices  RBAC, CA policies, app access
+M365 Group  Yes           Users only              Teams, SharePoint, shared mailbox
+Dist. List  Yes           Users (Exchange)        Email distribution only</pre>
+
+<h4>Assignment types</h4>
+<ul>
+<li><strong>Assigned</strong> - manually add/remove members. Simple but high maintenance.</li>
+<li><strong>Dynamic User</strong> - membership based on user attributes. Auto-updates. Requires P1.</li>
+<li><strong>Dynamic Device</strong> - membership based on device attributes.</li>
+</ul>
+
+<h4>Dynamic group rules (memorize syntax)</h4>
+<pre>// All users in IT department
+user.department -eq "IT"
+
+// All full-time employees (not guests)
+(user.userType -eq "Member") -and (user.employeeType -eq "FullTime")
+
+// All Windows devices with specific naming
+device.displayName -startsWith "CORP-"
+
+// Users in Houston office
+user.officeLocation -eq "Houston"
+
+// Multiple conditions
+(user.department -eq "Engineering") -and (user.jobTitle -contains "Senior")</pre>
+
+<h4>Group-based licensing</h4>
+<p>Assign M365 E3 license to a group. Anyone added gets the license. Anyone removed loses it. This is the enterprise way - never assign licenses to individual users.</p>
+
+<h4>Key commands (Microsoft Graph PowerShell)</h4>
+<pre>Connect-MgGraph -Scopes "User.Read.All","Group.ReadWrite.All"
+Get-MgUser -Filter "department eq 'IT'" | Select DisplayName, UserPrincipalName
+New-MgGroup -DisplayName "GRP-IT-AllStaff" -SecurityEnabled -GroupTypes @()
+Get-MgGroupMember -GroupId $groupId | Select-Object -ExpandProperty AdditionalProperties</pre>
+
+<div class="interview-tip">Interview tip: "I use dynamic groups for license assignment and Conditional Access targeting. For example, a dynamic group for all Houston users automatically gets the CA policy requiring MFA from non-office IPs. When someone transfers, their office attribute changes and policies adjust automatically."</div>
+`
+    },
+    {
+      id: 'entra-authentication',
+      title: 'Authentication Methods & MFA',
+      content: `
+<h4>Authentication methods (strongest to weakest)</h4>
+<pre>Method                   Type            Phishing-resistant?
+FIDO2 Security Key       Passwordless    Yes
+Windows Hello (WHfB)     Passwordless    Yes
+Certificate-based        Passwordless    Yes
+Microsoft Authenticator  Passwordless    Partial (number matching helps)
+Authenticator (push)     MFA             No (MFA fatigue attacks)
+Phone/SMS               MFA             No (SIM swap attacks)
+Password only           Single-factor   No</pre>
+
+<h4>MFA - how it actually works</h4>
+<p>User proves identity with 2+ of: something they know (password), something they have (phone/key), something they are (biometric).</p>
+
+<h4>Where to configure MFA</h4>
+<ul>
+<li><strong>Security Defaults</strong> - free, forces MFA for all users. All or nothing. Good for small orgs.</li>
+<li><strong>Conditional Access</strong> - granular, requires P1. Target specific users/apps/conditions. Enterprise standard.</li>
+<li><strong>Per-user MFA</strong> - legacy method. DON'T use this. Hard to manage at scale.</li>
+</ul>
+
+<h4>Self-Service Password Reset (SSPR)</h4>
+<ul>
+<li>Users reset their own password without calling helpdesk</li>
+<li>Requires: Entra ID P1 + authentication methods registered</li>
+<li>Password writeback: writes the new password back to on-prem AD (requires AD Connect + P1)</li>
+<li>Methods: Authenticator app, email, phone, security questions</li>
+</ul>
+
+<h4>Number matching (modern MFA)</h4>
+<p>Old push: "Approve sign-in?" - users blindly approve (MFA fatigue attack).
+New: "Enter the number shown: 42" - user must see their screen. Enabled by default now.</p>
+
+<div class="interview-tip">Interview tip: "I'd enforce MFA through Conditional Access rather than per-user or security defaults because CA gives us granular control. We can require MFA only from untrusted networks, exempt compliant devices in the office, and use report-only mode to test before enforcing."</div>
+`
+    },
+    {
+      id: 'entra-conditional-access',
+      title: 'Conditional Access Policies',
+      content: `
+<h4>What it is</h4>
+<p>Conditional Access is the "if-then" engine of Entra ID. IF a user matches certain conditions, THEN apply access controls. It's the core security tool for M365.</p>
+
+<h4>Policy anatomy</h4>
+<pre>ASSIGNMENTS (who/what/where):
+  Users & Groups - include/exclude specific users, groups, roles
+  Cloud Apps     - which apps (All, Office 365, specific apps)
+  Conditions:
+    - Sign-in risk (P2 only: high/medium/low)
+    - Device platform (Windows, iOS, Android, macOS)
+    - Location (named locations: IP ranges, countries)
+    - Client apps (browser, mobile, desktop, legacy auth)
+    - Device state (compliant, hybrid joined)
+
+ACCESS CONTROLS (what happens):
+  Grant:
+    - Block access
+    - Grant access + require MFA
+    - Grant access + require compliant device
+    - Grant access + require hybrid joined device
+    - Grant access + require approved app
+  Session:
+    - App enforced restrictions
+    - Sign-in frequency (re-auth every X hours)
+    - Persistent browser session</pre>
+
+<h4>The 5 CA policies every org needs (memorize these)</h4>
+<pre>1. Require MFA for all users (exclude break-glass accounts)
+2. Block legacy authentication (IMAP, POP3, SMTP - can't do MFA)
+3. Require MFA for Azure management (portal, CLI, PowerShell)
+4. Require compliant device for Office 365 access
+5. Block access from high-risk countries (unless you have staff there)</pre>
+
+<h4>Evaluation logic</h4>
+<ul>
+<li>ALL policies that match are evaluated (not just the first one)</li>
+<li>Block ALWAYS wins (if any matching policy blocks, access is denied)</li>
+<li>Most restrictive grant controls combine (if one policy requires MFA and another requires compliant device, user needs BOTH)</li>
+<li>Exclude always overrides include (break-glass in exclude list is never affected)</li>
+</ul>
+
+<h4>Testing</h4>
+<ul>
+<li><strong>Report-only mode</strong> - policy evaluates but doesn't enforce. Check sign-in logs for "Report-only: failure"</li>
+<li><strong>What If tool</strong> - simulate "if this user signs in from this location to this app, what policies apply?"</li>
+</ul>
+
+<h4>Break-glass accounts</h4>
+<pre>- 2 cloud-only Global Admin accounts
+- Excluded from ALL CA policies
+- No MFA (so you can get in if MFA is broken)
+- Long complex passwords stored physically (safe/vault)
+- Alert on any sign-in to these accounts
+- Test login quarterly to verify they still work</pre>
+
+<div class="interview-tip">Interview tip: "My rollout approach is: deploy in report-only mode first, monitor sign-in logs for a week to identify who would be impacted, communicate to users, then switch to enforcing. I always exclude break-glass accounts and test with What If before deploying."</div>
+`
+    },
+    {
+      id: 'entra-hybrid-identity',
+      title: 'AD Connect & Hybrid Sync',
+      content: `
+<h4>What it is</h4>
+<p>Azure AD Connect synchronizes on-prem AD objects (users, groups, devices) to Entra ID. It's the bridge that makes hybrid identity work.</p>
+
+<h4>Sync methods</h4>
+<pre>Method     How it works                           When to use
+PHS        Hash of password hash synced to cloud   Default. Resilient. Cloud auth works if on-prem is down.
+PTA        Auth request forwarded to on-prem agent On-prem validates password. Use if compliance blocks cloud storage.
+Federation ADFS handles all auth                   Smart cards, third-party MFA, complex claims. Most complex.</pre>
+
+<h4>AD Connect vs Cloud Sync (know the difference)</h4>
+<pre>Feature              AD Connect          Cloud Sync
+Multi-forest         Yes                 Yes
+Password writeback   Yes                 Yes (newer)
+Device writeback     Yes                 No
+Filtering            Full (OU, domain,   OU/group only
+                     attribute, group)
+Exchange hybrid      Yes                 Limited
+Staging mode         Yes                 N/A (lightweight agents)
+HA approach          Staging server      Multiple agents (built-in)</pre>
+
+<h4>AD Connect architecture</h4>
+<pre>On-Prem AD (DC) --> AD Connect Server --> Entra ID (cloud)
+                    (Windows Server)
+                    Sync every 30 min
+                    Ports: 443 outbound only
+                    No inbound firewall rules needed</pre>
+
+<h4>Filtering (what syncs)</h4>
+<ul>
+<li><strong>OU filtering</strong> - most common. Select which OUs sync. Never sync admin accounts.</li>
+<li><strong>Domain filtering</strong> - in multi-domain forests, choose which domains.</li>
+<li><strong>Attribute filtering</strong> - sync only if attribute matches condition.</li>
+<li><strong>Group filtering</strong> - members of a specific group sync. Good for pilots.</li>
+</ul>
+
+<h4>sourceAnchor / immutableId</h4>
+<p>The unique identifier that links on-prem object to cloud object. Default is ms-DS-ConsistencyGuid (falls back to ObjectGUID). NEVER change this in production.</p>
+
+<h4>Troubleshooting sync</h4>
+<pre>1. Check sync status:  Get-ADSyncScheduler
+2. Force sync:         Start-ADSyncSyncCycle -PolicyType Delta
+3. Full sync:          Start-ADSyncSyncCycle -PolicyType Initial
+4. Check errors:       Get-ADSyncConnectorRunStatus
+5. Event log:          Application log, source "ADSync"
+6. Portal:             Entra ID > AD Connect > Sync status</pre>
+
+<h4>Staging mode</h4>
+<p>A second AD Connect server that imports and syncs but does NOT export to Entra ID. It's your disaster recovery. If primary fails, disable staging mode on secondary and it takes over.</p>
+
+<div class="interview-tip">Interview tip: "For the domain migration, I'd put the current AD Connect in staging mode before cutover, verify the new sync configuration on a separate instance, then swap. This gives us a clean rollback - if anything breaks, re-enable the staging server pointing to the old domain."</div>
+`
+    },
+    {
+      id: 'entra-domain-migration',
+      title: 'Domain Migration Planning',
+      content: `
+<h4>What it is</h4>
+<p>Moving users, computers, and resources from one AD domain/forest to another. The 2026 migration in this JD is likely consolidating multiple domains or moving to a new domain name.</p>
+
+<h4>The 5 phases (memorize this framework)</h4>
+<pre>Phase 1: ASSESSMENT (weeks 1-4)
+  - Inventory: users, groups, computers, GPOs, service accounts
+  - Identify dependencies: apps tied to specific domain, SPNs, certificates
+  - Document current state: trusts, sites, replication topology
+  - Identify risk: what breaks if we move too fast?
+
+Phase 2: COEXISTENCE (weeks 5-8)
+  - Establish forest/domain trust (bidirectional)
+  - Users can access resources in both domains
+  - Set up selective authentication if needed
+  - Configure AD Connect to sync both sources (or prepare new sync)
+  - Test with pilot group
+
+Phase 3: MIGRATION (weeks 9-16)
+  - Migrate in waves (department by department)
+  - ADMT or migration tool moves objects with SID History
+  - SID History preserves access to old-domain resources
+  - Migrate computers (domain re-join or ADMT)
+  - Migrate group memberships
+
+Phase 4: CUTOVER (week 17)
+  - Final sync/migration of remaining objects
+  - DNS cutover (old domain CNAME to new, or decommission)
+  - Update UPNs in Entra ID (critical for SSO)
+  - Update AD Connect filtering to new domain
+  - Verify all Conditional Access policies still work
+
+Phase 5: DECOMMISSION (weeks 18-20)
+  - Remove trusts
+  - Demote old domain controllers
+  - Clean up DNS records
+  - Remove old AD Connect configuration
+  - Update documentation
+  - Monitor for 30 days before final cleanup</pre>
+
+<h4>What breaks during migration</h4>
+<ul>
+<li>Kerberos delegation (SPNs tied to old domain)</li>
+<li>Certificate-based auth (certs have old UPN in SAN)</li>
+<li>Scheduled tasks running as domain accounts</li>
+<li>Application connection strings with old domain names</li>
+<li>User profile paths (\\\\oldDomain\\...)</li>
+<li>Mapped drives via GPO referencing old domain</li>
+</ul>
+
+<h4>Impact on Entra ID / M365</h4>
+<ul>
+<li>UPN changes affect sign-in (user@olddomain.com -> user@newdomain.com)</li>
+<li>AD Connect needs reconfiguration for new source</li>
+<li>Soft-match by email or hard-match by immutableId to avoid duplicates</li>
+<li>Conditional Access policies targeting groups still work if groups migrate with SID History</li>
+<li>Exchange Online routing may need updating if email domain changes</li>
+</ul>
+
+<div class="interview-tip">Interview tip: "My approach to the migration would be phase-based with a rollback plan at every stage. I'd start with assessment - inventorying every dependency. The biggest risks are always service accounts and applications with hardcoded domain references. I'd migrate in waves, starting with IT staff as the pilot, and maintain coexistence until we've verified every user and application is functional in the new domain."</div>
+`
+    },
+    {
+      id: 'entra-roles',
+      title: 'Admin Roles & Least Privilege',
+      content: `
+<h4>What it is</h4>
+<p>Entra ID has built-in admin roles. NEVER give Global Admin to people who don't need it. Assign the minimum role needed for the task.</p>
+
+<h4>Key roles to know</h4>
+<pre>Role                        What they can do
+Global Admin                Everything. Only break-glass + 1-2 senior staff.
+User Admin                  Create/manage users, reset passwords (non-admins)
+Groups Admin                Create/manage all groups
+Security Admin              Read security info, manage CA policies, Identity Protection
+Exchange Admin              Full Exchange Online management
+SharePoint Admin            Full SharePoint/OneDrive management
+Teams Admin                 Full Teams management
+Intune Admin                Full Intune/endpoint management
+Helpdesk Admin              Reset passwords for non-admins, invalidate tokens
+Authentication Admin        Manage auth methods, force re-register MFA
+Cloud Device Admin          Enable/disable/delete devices in Entra ID
+License Admin               Manage license assignments</pre>
+
+<h4>Role assignment best practices</h4>
+<ul>
+<li>Maximum 2-3 Global Admins (plus 2 break-glass)</li>
+<li>Use PIM for just-in-time elevation (P2 feature - know it exists)</li>
+<li>Use Administrative Units to scope User Admin to specific departments</li>
+<li>Review role assignments quarterly</li>
+<li>All admin accounts should have MFA enforced</li>
+</ul>
+
+<h4>Administrative Units (scoped admin)</h4>
+<p>Like OUs in AD but for Entra ID. Scope a User Admin role to "Houston-AU" so they can only manage Houston users.</p>
+<pre>Administrative Unit: Houston-Office
+  Scoped Role: User Admin -> Help Desk Team
+  Members: All Houston users (dynamic or assigned)
+  Result: Help desk can reset passwords only for Houston users</pre>
+
+<div class="interview-tip">Interview tip: "I follow least privilege strictly. Day-to-day I'd use a standard user account and only elevate when needed. For the team, I'd assign scoped roles - Exchange Admin for the mail team, Intune Admin for desktop support - rather than giving everyone Contributor or Global Admin."</div>
+`
+    }
+  ]
+},
+{
+  id: 'm365',
+  name: '03 M365 Administration',
+  desc: 'Exchange Online, SharePoint, Teams, licensing',
+  topics: [
+    {
+      id: 'm365-licensing',
+      title: 'M365 E3 License - What You Get',
+      content: `
+<h4>What it is</h4>
+<p>M365 E3 is the enterprise standard license bundle. Know exactly what's included because it defines your toolbox.</p>
+
+<h4>E3 includes</h4>
+<pre>IDENTITY & ACCESS:
+  Entra ID P1 (Conditional Access, dynamic groups, SSPR, app proxy)
+
+PRODUCTIVITY:
+  Exchange Online Plan 2 (50GB mailbox, unlimited archive, litigation hold)
+  SharePoint Online Plan 2 (1TB org + 10GB per user)
+  OneDrive Plan 2 (5TB per user, expandable)
+  Microsoft Teams
+  Office desktop apps (Word, Excel, PowerPoint, Outlook, Access, Publisher)
+
+SECURITY:
+  Microsoft Defender for Office 365 Plan 1 (safe links, safe attachments)
+  Microsoft Purview (DLP, sensitivity labels, retention)
+  Azure Information Protection P1
+
+DEVICE MANAGEMENT:
+  Microsoft Intune Plan 1
+  Windows Autopilot
+  Windows 10/11 Enterprise E3 (upgrade rights)
+
+COMPLIANCE:
+  eDiscovery Standard
+  Basic Audit (90 days)
+  Communication Compliance (basic)</pre>
+
+<h4>What E3 does NOT include (need E5 or add-ons)</h4>
+<pre>- Entra ID P2 (PIM, Identity Protection risk policies, access reviews)
+- Defender for Office 365 Plan 2 (Threat Explorer, automated investigation)
+- Microsoft Defender for Endpoint Plan 2 (full EDR)
+- Phone System / Audio Conferencing
+- Advanced Audit (1-year retention)
+- eDiscovery Premium
+- Advanced Compliance (insider risk, communication compliance full)</pre>
+
+<h4>License assignment patterns</h4>
+<ul>
+<li><strong>Group-based licensing</strong> (recommended) - assign to security group, auto-applies to members</li>
+<li><strong>Direct assignment</strong> - assign to individual user (avoid at scale)</li>
+<li><strong>Service plan toggling</strong> - disable specific services within E3 (e.g., disable Yammer)</li>
+</ul>
+
+<h4>Common license issues</h4>
+<pre>Problem: "Not enough licenses"
+Fix: Check available count, purchase more, or remove from inactive users
+
+Problem: "Conflicting service plans"
+Fix: User has E3 + separate Exchange plan. Remove the standalone.
+
+Problem: "License assignment failed" (group-based)
+Fix: Check Entra ID > Licenses > group > Processing errors</pre>
+
+<h4>Key PowerShell</h4>
+<pre>Get-MgSubscribedSku | Select SkuPartNumber, ConsumedUnits, PrepaidUnits
+Get-MgUser -Filter "assignedLicenses/any()" -Select DisplayName,AssignedLicenses
+Set-MgUserLicense -UserId user@domain.com -AddLicenses @{SkuId="..."} -RemoveLicenses @()</pre>
+
+<div class="interview-tip">Interview tip: "I manage licenses through group-based assignment. A dynamic group for all full-time employees auto-assigns E3. When someone leaves, removing them from the group reclaims the license automatically. I run a monthly license report to identify and reclaim unused licenses."</div>
+`
+    },
+    {
+      id: 'm365-exchange',
+      title: 'Exchange Online Administration',
+      content: `
+<h4>What it is</h4>
+<p>Exchange Online is enterprise email and calendaring. As M365 admin you manage mailboxes, mail flow, security policies, and troubleshoot delivery issues.</p>
+
+<h4>Mailbox types</h4>
+<pre>Type          License needed?  Use case
+User          Yes (E3)         Individual employee mailbox
+Shared        No               Team/department mailbox (info@, hr@)
+Room          No               Conference room booking
+Equipment     No               Projectors, vehicles, etc.
+Distribution  No               Email group (one-way, no mailbox)
+M365 Group    No (with E3)     Collaborative mailbox + SharePoint + Teams</pre>
+
+<h4>Common admin tasks</h4>
+<pre>- Create/manage shared mailboxes
+- Set mailbox permissions (Full Access, Send As, Send on Behalf)
+- Configure mail flow rules (transport rules)
+- Manage quarantine (review blocked messages)
+- Set up auto-replies for termed employees
+- Litigation hold for legal/compliance
+- Mailbox size management (archive policies)</pre>
+
+<h4>Mail flow rules (transport rules) - common patterns</h4>
+<pre>1. External email disclaimer
+   Condition: Message is sent to outside the org
+   Action: Append disclaimer HTML
+
+2. Block auto-forwarding to external
+   Condition: Message type is auto-forward, sent externally
+   Action: Reject with message
+
+3. Encrypt sensitive emails
+   Condition: Subject contains "CONFIDENTIAL"
+   Action: Apply Office 365 Message Encryption
+
+4. Copy executive mail to compliance
+   Condition: Sender is member of "Executives" group
+   Action: BCC to compliance mailbox</pre>
+
+<h4>Key PowerShell</h4>
+<pre>Connect-ExchangeOnline
+Get-Mailbox -ResultSize Unlimited | Select DisplayName, PrimarySmtpAddress
+Get-Mailbox -RecipientTypeDetails SharedMailbox
+Get-MailboxPermission -Identity "shared@company.com"
+Add-MailboxPermission -Identity "shared@company.com" -User user@company.com -AccessRights FullAccess
+New-Mailbox -Shared -Name "HR Inbox" -PrimarySmtpAddress hr@company.com
+Get-TransportRule | Select Name, State, Priority
+Get-MessageTrace -SenderAddress user@company.com -StartDate (Get-Date).AddDays(-7)</pre>
+
+<h4>Troubleshooting mail delivery</h4>
+<pre>1. Message Trace (Exchange Admin Center or Get-MessageTrace)
+   - Shows path of message: delivered, quarantined, failed
+2. Check spam confidence level (SCL)
+3. Check mail flow rules (did a rule redirect/block?)
+4. Check quarantine (was it caught by Safe Attachments/Links?)
+5. Check DNS (MX, SPF, DKIM, DMARC records)
+6. NDR code lookup (550 5.1.1 = user not found, etc.)</pre>
+
+<div class="interview-tip">Interview tip: "For mail delivery issues, I start with Message Trace in EAC. It shows me exactly where the message stopped - whether it was quarantined by Defender, blocked by a transport rule, or rejected by the recipient's system. I also check our SPF, DKIM, and DMARC records to make sure we're authenticated properly."</div>
+`
+    },
+    {
+      id: 'm365-sharepoint',
+      title: 'SharePoint Online & OneDrive',
+      content: `
+<h4>What it is</h4>
+<p>SharePoint = organization's intranet, document management, and collaboration platform. OneDrive = personal file storage (it's actually a personal SharePoint site under the hood).</p>
+
+<h4>SharePoint architecture</h4>
+<pre>Tenant
+  Site Collection (root: contoso.sharepoint.com)
+    Team Sites (connected to M365 Groups)
+    Communication Sites (news, announcements)
+      Document Libraries
+        Folders
+          Files (with version history)</pre>
+
+<h4>Admin responsibilities</h4>
+<ul>
+<li>Site collection creation and lifecycle</li>
+<li>Storage quota management (1TB + 10GB/user)</li>
+<li>External sharing policies (org-wide and per-site)</li>
+<li>Permissions troubleshooting (inheritance breaks)</li>
+<li>Migration (file shares to SharePoint)</li>
+</ul>
+
+<h4>Sharing levels (most open to most restrictive)</h4>
+<pre>1. Anyone (anonymous links) - no sign-in required
+2. New and existing guests - external users must authenticate
+3. Existing guests only - must already be in directory
+4. Only people in your organization - no external sharing</pre>
+
+<h4>Permission model</h4>
+<pre>Site level: Owners (full control), Members (edit), Visitors (read)
+Library level: can break inheritance, set unique permissions
+Item level: can share individual files/folders (avoid this - hard to manage)</pre>
+
+<h4>Common issues</h4>
+<pre>Problem: "User can't access site"
+Check: Are they in the right M365 group? Check site permissions. Check CA policies blocking.
+
+Problem: "Storage almost full"
+Fix: Check Storage metrics in admin center. Large files? Versioning eating space? Set version limits.
+
+Problem: "External user can't open shared file"
+Check: Sharing level for that site. Guest account created? CA policy blocking guests?</pre>
+
+<div class="interview-tip">Interview tip: "I manage SharePoint sharing at the org level with 'New and existing guests' as default, then tighten per-site where needed. Sensitive sites like HR or Finance get set to 'Only people in your organization.' I also set version history limits to prevent storage bloat."</div>
+`
+    },
+    {
+      id: 'm365-teams',
+      title: 'Microsoft Teams Administration',
+      content: `
+<h4>What it is</h4>
+<p>Teams is the collaboration hub - chat, meetings, calling, and apps. Under the hood, every Team is an M365 Group with a SharePoint site, Exchange mailbox, and OneNote notebook.</p>
+
+<h4>Admin center controls</h4>
+<pre>Teams Admin Center (admin.teams.microsoft.com):
+  - Messaging policies (who can edit/delete messages, use GIFs, etc.)
+  - Meeting policies (who can record, lobby settings, screen sharing)
+  - App permission policies (which third-party apps are allowed)
+  - Guest access (external users in Teams)
+  - External access (federation with other M365 tenants)
+  - Phone/calling policies (if using Teams Phone)</pre>
+
+<h4>Guest vs External access</h4>
+<pre>Guest Access:
+  - External user added TO your Teams/channels
+  - Gets a guest account in your Entra ID
+  - Can see channel content, chat, join meetings
+  - Controlled by CA policies (you can require guest MFA)
+
+External Access (federation):
+  - Chat/call with users in OTHER M365 tenants
+  - No account in your tenant
+  - Cannot see your Teams/channels
+  - Just 1:1 or group chat</pre>
+
+<h4>Key policies to configure</h4>
+<ul>
+<li>Meeting recording auto-expiration (default 120 days)</li>
+<li>Lobby settings for external users</li>
+<li>App permission - block all third-party, allow specific ones</li>
+<li>Who can create Teams (limit to avoid sprawl)</li>
+<li>Naming convention for Teams/Groups</li>
+</ul>
+
+<h4>Teams sprawl management</h4>
+<pre>Problem: 500 Teams created with no naming convention, half abandoned
+Solution:
+  - M365 Group expiration policy (owners must renew every 180 days)
+  - Group naming policy (prefix: DEPT-TeamName)
+  - Restrict creation to specific security group
+  - Monthly report of inactive Teams</pre>
+
+<div class="interview-tip">Interview tip: "I manage Teams governance through M365 group policies - expiration, naming conventions, and restricting creation to department leads. This prevents sprawl while still letting teams collaborate. For security, I use CA policies to require MFA for guest access and block unmanaged devices from downloading files."</div>
+`
+    }
+  ]
+},
+{
+  id: 'intune',
+  name: '04 Intune & Endpoint',
+  desc: 'Device management, compliance, Autopilot, app deployment',
+  topics: [
+    {
+      id: 'intune-architecture',
+      title: 'Intune Architecture & Enrollment',
+      content: `
+<h4>What it is</h4>
+<p>Microsoft Intune is cloud-based MDM (Mobile Device Management) and MAM (Mobile Application Management). It replaces on-prem tools like SCCM/GPO for device management.</p>
+
+<h4>MDM vs MAM</h4>
+<pre>MDM (device-level):
+  - Full device management
+  - Push policies, apps, certificates
+  - Wipe device remotely
+  - Require encryption, password complexity
+  - Company owns the device
+
+MAM (app-level):
+  - Manage only company apps/data
+  - Personal device stays personal
+  - Wipe only company data (selective wipe)
+  - BYOD scenario</pre>
+
+<h4>Device identity states (know these cold)</h4>
+<pre>State                What it means                     Use case
+Entra Registered     Personal device, user signs in     BYOD - access company apps
+Entra Joined         Company device, cloud-only         No on-prem AD, pure cloud
+Hybrid Entra Joined  Domain-joined + registered in Entra  Existing AD environment (THIS ROLE)</pre>
+
+<h4>Enrollment methods</h4>
+<pre>Method              Best for                    How it works
+Windows Autopilot   New devices, zero-touch     Hardware hash pre-registered, OOBE customized
+Manual enrollment   One-off, testing            Settings > Access work or school > Connect
+GPO auto-enroll     Existing domain-joined PCs  GPO triggers enrollment for hybrid joined
+Co-management       SCCM + Intune together      Gradual migration from SCCM to Intune
+Bulk enrollment     Kiosks, shared devices      Provisioning package (PPKG)</pre>
+
+<h4>Windows Autopilot flow</h4>
+<pre>1. Vendor registers hardware hash with your tenant
+2. Device ships directly to employee
+3. Employee powers on, connects to internet
+4. OOBE shows company branding (not generic Windows setup)
+5. User signs in with Entra credentials
+6. Device auto-enrolls in Intune
+7. Compliance + config policies apply
+8. Apps install automatically
+9. User is productive in ~30 minutes (no IT imaging needed)</pre>
+
+<h4>For 300+ device fleet (this role)</h4>
+<ul>
+<li>Existing devices: GPO auto-enrollment or manual enrollment wave</li>
+<li>New devices: Autopilot going forward</li>
+<li>Hybrid Entra Join for devices still needing on-prem AD access</li>
+<li>Transition plan: on-prem GPO -> Intune config profiles over time</li>
+</ul>
+
+<div class="interview-tip">Interview tip: "For the existing fleet of 300+ devices, I'd use GPO auto-enrollment to get them into Intune without touching each one. New devices going forward would use Autopilot for zero-touch deployment. This lets us gradually shift policy management from GPO to Intune configuration profiles."</div>
+`
+    },
+    {
+      id: 'intune-compliance',
+      title: 'Compliance Policies & Conditional Access Integration',
+      content: `
+<h4>What it is</h4>
+<p>Compliance policies define the minimum security state a device must meet. Combined with Conditional Access, non-compliant devices get blocked from company resources.</p>
+
+<h4>Compliance vs Configuration</h4>
+<pre>Compliance Policy:
+  - "Is this device meeting our standards?" (pass/fail check)
+  - Does NOT change settings
+  - Reports compliant/not compliant
+  - Used as gate in Conditional Access
+
+Configuration Profile:
+  - "Make this device meet our standards" (pushes settings)
+  - Actively changes device settings
+  - Enforces configuration
+  - Doesn't block access by itself</pre>
+
+<h4>Common compliance requirements</h4>
+<pre>Windows compliance policy:
+  - BitLocker encryption: Required
+  - Firewall: Required
+  - Antivirus: Required (Defender active)
+  - Minimum OS version: Windows 10 22H2
+  - Password: Required, minimum 8 characters
+  - TPM: Required
+  - Secure Boot: Required</pre>
+
+<h4>The magic combination: Compliance + Conditional Access</h4>
+<pre>Step 1: Create compliance policy
+  "Device must have BitLocker + current antivirus + minimum OS version"
+
+Step 2: Create Conditional Access policy
+  "Grant access to Office 365 ONLY if device is marked compliant"
+
+Result: User tries to access email on non-compliant device -> blocked
+        User gets notification to fix compliance -> fixes it -> access granted</pre>
+
+<h4>Grace period and actions for noncompliance</h4>
+<pre>Day 0: Mark as not compliant (immediately)
+Day 1: Send email notification to user
+Day 3: Send email to manager
+Day 7: Retire device (remove company data)
+Day 14: Wipe device (full reset) - use cautiously</pre>
+
+<h4>Key commands</h4>
+<pre>// Check device compliance status
+Get-MgDeviceManagementManagedDevice -Filter "complianceState eq 'noncompliant'" |
+  Select DeviceName, ComplianceState, LastSyncDateTime</pre>
+
+<div class="interview-tip">Interview tip: "I pair compliance policies with Conditional Access so enforcement is automatic. If a device falls out of compliance - say antivirus definitions expire or encryption gets disabled - the user immediately loses access to M365 resources until the device is remediated. No manual intervention needed."</div>
+`
+    },
+    {
+      id: 'intune-config-profiles',
+      title: 'Configuration Profiles & Security Baselines',
+      content: `
+<h4>What it is</h4>
+<p>Configuration profiles push settings to devices - the Intune equivalent of Group Policy. Security baselines are pre-built profiles based on Microsoft's recommended security settings.</p>
+
+<h4>Profile types</h4>
+<pre>Type                     What it configures
+Device restrictions      Lock screen, camera, bluetooth, USB, screen capture
+Wi-Fi                   Auto-connect to corporate SSID with cert auth
+VPN                     Always-on VPN or per-app VPN
+Email                   Auto-configure Outlook with user's mailbox
+Certificate (SCEP/PKCS) Deploy certificates for Wi-Fi/VPN auth
+Custom (OMA-URI)        Any setting via direct CSP path
+Endpoint Protection     Firewall rules, BitLocker, Defender settings
+Administrative Templates GPO-like settings (ADMX-backed)</pre>
+
+<h4>Security baselines available</h4>
+<ul>
+<li>Windows 10/11 Security Baseline (Microsoft recommended settings)</li>
+<li>Microsoft Edge Security Baseline</li>
+<li>Microsoft 365 Apps Security Baseline</li>
+<li>Windows 365 Security Baseline (cloud PCs)</li>
+<li>Microsoft Defender for Endpoint Baseline</li>
+</ul>
+
+<h4>Baseline vs Custom profiles</h4>
+<pre>Use Baselines when:
+  - You want Microsoft's recommended secure defaults
+  - You don't have specific custom requirements
+  - You want to quickly deploy "industry standard" security
+
+Use Custom profiles when:
+  - You need settings not in the baseline
+  - You need to override baseline settings for specific groups
+  - You have unique organizational requirements</pre>
+
+<h4>Conflict resolution</h4>
+<pre>When multiple profiles set the same setting:
+  - Most restrictive wins (for security settings)
+  - Last applied wins (for some settings)
+  - Conflict is reported in Intune portal
+  - Check: Devices > device > Device configuration > per-setting status</pre>
+
+<h4>GPO to Intune migration</h4>
+<pre>Tool: Group Policy Analytics in Intune
+1. Export GPOs as XML from GPMC
+2. Import into Intune > Devices > Group Policy analytics
+3. Shows: supported, not supported, deprecated
+4. Create equivalent Intune profiles for supported settings
+5. Deploy to pilot group, validate, then broader rollout</pre>
+
+<div class="interview-tip">Interview tip: "For the 300-device fleet, I'd deploy Microsoft's Windows security baseline as the foundation, then layer custom profiles for org-specific settings like Wi-Fi and VPN. I'd use Group Policy Analytics to identify which existing GPOs can be migrated to Intune and which need alternative solutions."</div>
+`
+    },
+    {
+      id: 'intune-apps',
+      title: 'Application Deployment',
+      content: `
+<h4>What it is</h4>
+<p>Intune deploys apps to managed devices without users needing admin rights or IT touching each machine.</p>
+
+<h4>App types in Intune</h4>
+<pre>Type                Platform    Best for
+Microsoft 365 Apps  Windows     Office suite (auto-updates via CDN)
+Win32 App (.intunewin) Windows  Any .exe/.msi wrapped in Intune format
+MSI line-of-business Windows   Simple MSI installers
+Microsoft Store     Windows     Store apps (new store, no packaging)
+Web link            Any         Shortcuts to web apps
+iOS/Android apps    Mobile      Company Portal, LOB apps</pre>
+
+<h4>Win32 app deployment (most common)</h4>
+<pre>1. Package: Use IntuneWinAppUtil.exe to wrap installer
+   IntuneWinAppUtil.exe -c "source_folder" -s "setup.exe" -o "output_folder"
+
+2. Upload to Intune:
+   - Apps > Windows > Add > Windows app (Win32)
+   - Upload .intunewin file
+
+3. Configure:
+   - Install command: setup.exe /S /quiet
+   - Uninstall command: setup.exe /uninstall /S
+   - Detection rules: file exists, registry key, or MSI product code
+   - Requirements: OS version, disk space, architecture
+
+4. Assign:
+   - Required = auto-install (no user action)
+   - Available = shows in Company Portal (user chooses)
+   - Uninstall = removes from devices in group</pre>
+
+<h4>Detection rules (how Intune knows app is installed)</h4>
+<pre>Type        Example
+File        C:\\Program Files\\App\\app.exe exists
+Registry    HKLM\\SOFTWARE\\App\\Version equals "2.1"
+MSI         Product code {GUID} detected
+Script      Custom PowerShell returns exit 0 = detected</pre>
+
+<h4>Dependencies and supersedence</h4>
+<ul>
+<li><strong>Dependency</strong> - install App B before App A (e.g., install .NET before your app)</li>
+<li><strong>Supersedence</strong> - App v2 replaces App v1 (auto-upgrade path)</li>
+</ul>
+
+<div class="interview-tip">Interview tip: "For app deployment I use Win32 packaging because it handles dependencies, detection rules, and retry logic. I set up apps as 'Required' for critical software like security tools, and 'Available' in Company Portal for optional tools so users have self-service without needing admin rights or IT tickets."</div>
+`
+    },
+    {
+      id: 'intune-purview-dlp',
+      title: 'Microsoft Purview & DLP Policies',
+      content: `
+<h4>What it is</h4>
+<p>Microsoft Purview is the compliance and data governance platform. DLP (Data Loss Prevention) policies prevent sensitive data from leaving the organization.</p>
+
+<h4>Purview components relevant to this role</h4>
+<pre>Sensitivity Labels  - classify and protect documents/emails
+DLP Policies        - detect and block sensitive data sharing
+Retention Policies  - keep or delete data after time period
+eDiscovery          - search and export for legal holds
+Audit               - who did what, when (90 days E3, 1 year E5)</pre>
+
+<h4>Sensitivity labels</h4>
+<pre>Label taxonomy (typical enterprise):
+  Public           - no protection, anyone can access
+  Internal         - org-only, no external sharing
+  Confidential     - encrypted, specific people/groups only
+  Highly Confidential - encrypted, no forwarding, watermarked, tracked
+
+What labels can do:
+  - Encrypt content (only labeled recipients can open)
+  - Add watermarks, headers, footers
+  - Restrict access to specific users/groups
+  - Prevent copy/paste, screenshots, forwarding
+  - Auto-apply based on content (credit card numbers, SSN)</pre>
+
+<h4>DLP policy anatomy</h4>
+<pre>Locations: Exchange, SharePoint, OneDrive, Teams, Endpoints, Power BI
+Conditions: Content contains sensitive info types (SSN, credit card, etc.)
+Actions:
+  - Block sharing externally
+  - Show policy tip to user ("This contains sensitive data")
+  - Require business justification to override
+  - Notify admin/compliance team
+  - Encrypt automatically</pre>
+
+<h4>Common DLP scenarios</h4>
+<pre>1. Block SSN/Tax ID sharing outside org
+   Location: Exchange + SharePoint + Teams
+   Condition: Content contains US SSN (confidence > 85%)
+   Action: Block external sharing, notify user and compliance
+
+2. Warn on financial data
+   Location: All
+   Condition: Content contains credit card numbers
+   Action: Show warning, allow override with justification
+
+3. Block sensitive files on USB (endpoint DLP)
+   Location: Devices
+   Condition: File has "Confidential" label
+   Action: Block copy to USB/Bluetooth</pre>
+
+<div class="interview-tip">Interview tip: "I'd implement DLP in phases - start with audit-only mode to see what sensitive data is being shared and where, then communicate to users about the upcoming policy, then enforce with user notifications and override options. Hard blocks from day one create user frustration and shadow IT workarounds."</div>
+`
+    }
+  ]
+},
+{
+  id: 'powershell',
+  name: '05 PowerShell & Automation',
+  desc: 'M365 modules, Graph API, real-world scripts, automation patterns',
+  topics: [
+    {
+      id: 'ps-m365-modules',
+      title: 'M365 PowerShell Module Landscape',
+      content: `
+<h4>What it is</h4>
+<p>PowerShell is the automation backbone of M365 administration. Different modules connect to different services. The old modules are being deprecated - know the new ones.</p>
+
+<h4>Module map (current vs deprecated)</h4>
+<pre>Service             Current Module              Deprecated (don't use)
+Entra ID/Users      Microsoft.Graph              MSOnline, AzureAD
+Exchange Online     ExchangeOnlineManagement     Remote PS session
+SharePoint          PnP.PowerShell               Microsoft.Online.SharePoint
+Teams               MicrosoftTeams               Skype for Business Online
+Intune              Microsoft.Graph              WindowsAutoPilotIntune
+Security            Microsoft.Graph              n/a
+Azure resources     Az (Az.Accounts, etc.)       AzureRM</pre>
+
+<h4>Connecting to services</h4>
+<pre># Microsoft Graph (Entra ID, Intune, users, groups)
+Connect-MgGraph -Scopes "User.Read.All","Group.ReadWrite.All"
+
+# Exchange Online
+Connect-ExchangeOnline -UserPrincipalName admin@domain.com
+
+# SharePoint Online (PnP)
+Connect-PnPOnline -Url "https://tenant.sharepoint.com" -Interactive
+
+# Teams
+Connect-MicrosoftTeams
+
+# Azure resources
+Connect-AzAccount</pre>
+
+<h4>Microsoft Graph SDK structure</h4>
+<pre># Pattern: Get-Mg[Resource], New-Mg[Resource], Update-Mg[Resource], Remove-Mg[Resource]
+Get-MgUser                    # List all users
+Get-MgUser -UserId "user@domain.com"  # Specific user
+Get-MgGroup                   # List all groups
+Get-MgUserMemberOf            # User's group memberships
+New-MgUser                    # Create user
+Update-MgUser                 # Modify user
+Remove-MgUser                 # Delete user</pre>
+
+<h4>Permissions (scopes)</h4>
+<p>Graph requires explicit permission scopes. You must request what you need:</p>
+<pre>User.Read.All          - Read all user profiles
+User.ReadWrite.All     - Create/modify users
+Group.ReadWrite.All    - Manage groups
+Directory.ReadWrite.All - Full directory access
+DeviceManagementManagedDevices.Read.All - Read Intune devices
+Mail.Read              - Read mailboxes</pre>
+
+<div class="interview-tip">Interview tip: "I use Microsoft Graph PowerShell for identity tasks because MSOnline and AzureAD modules are deprecated. For Exchange I use ExchangeOnlineManagement with certificate-based auth for unattended scripts. I always scope Graph permissions to the minimum needed for the task."</div>
+`
+    },
+    {
+      id: 'ps-common-scripts',
+      title: 'Essential Admin Scripts',
+      content: `
+<h4>Script 1: Stale Account Report</h4>
+<pre>Connect-MgGraph -Scopes "User.Read.All","AuditLog.Read.All"
+
+$staleDate = (Get-Date).AddDays(-90)
+$staleUsers = Get-MgUser -All -Property DisplayName,UserPrincipalName,SignInActivity |
+  Where-Object {
+    $_.SignInActivity.LastSignInDateTime -lt $staleDate -and
+    $_.AccountEnabled -eq $true
+  } |
+  Select-Object DisplayName, UserPrincipalName,
+    @{N='LastSignIn';E={$_.SignInActivity.LastSignInDateTime}}
+
+$staleUsers | Export-Csv "StaleAccounts_$(Get-Date -Format yyyyMMdd).csv" -NoTypeInformation
+Write-Host "Found $($staleUsers.Count) stale accounts"</pre>
+
+<h4>Script 2: Bulk License Assignment from CSV</h4>
+<pre># CSV format: UserPrincipalName
+$users = Import-Csv "new_hires.csv"
+$skuId = (Get-MgSubscribedSku | Where SkuPartNumber -eq "ENTERPRISEPACK").SkuId
+
+foreach ($user in $users) {
+    try {
+        Set-MgUserLicense -UserId $user.UserPrincipalName \\
+          -AddLicenses @(@{SkuId=$skuId}) -RemoveLicenses @()
+        Write-Host "Licensed: $($user.UserPrincipalName)" -ForegroundColor Green
+    } catch {
+        Write-Host "FAILED: $($user.UserPrincipalName) - $_" -ForegroundColor Red
+    }
+}</pre>
+
+<h4>Script 3: MFA Registration Report</h4>
+<pre>$users = Get-MgUser -All -Property DisplayName,UserPrincipalName
+$report = foreach ($user in $users) {
+    $methods = Get-MgUserAuthenticationMethod -UserId $user.Id
+    [PSCustomObject]@{
+        User = $user.DisplayName
+        UPN = $user.UserPrincipalName
+        MethodCount = $methods.Count
+        HasMFA = $methods.Count -gt 1
+    }
+}
+$report | Where-Object { -not $_.HasMFA } | Export-Csv "NoMFA.csv" -NoTypeInformation</pre>
+
+<h4>Script 4: New Hire Onboarding</h4>
+<pre>param(
+    [string]$FirstName,
+    [string]$LastName,
+    [string]$Department,
+    [string]$Manager
+)
+
+$UPN = "$($FirstName.ToLower()).$($LastName.ToLower())@domain.com"
+$password = [System.Web.Security.Membership]::GeneratePassword(16, 4)
+
+# Create user
+$params = @{
+    DisplayName = "$FirstName $LastName"
+    UserPrincipalName = $UPN
+    MailNickname = "$FirstName$LastName"
+    Department = $Department
+    AccountEnabled = $true
+    PasswordProfile = @{
+        Password = $password
+        ForceChangePasswordNextSignIn = $true
+    }
+}
+New-MgUser @params
+
+# Assign to department group (triggers license via group-based licensing)
+$group = Get-MgGroup -Filter "displayName eq 'GRP-$Department-AllStaff'"
+New-MgGroupMember -GroupId $group.Id -DirectoryObjectId (Get-MgUser -UserId $UPN).Id
+
+# Assign manager
+$managerRef = @{ "@odata.id" = "https://graph.microsoft.com/v1.0/users/$Manager" }
+Set-MgUserManagerByRef -UserId $UPN -BodyParameter $managerRef
+
+Write-Host "Created $UPN | Temp password: $password"</pre>
+
+<div class="interview-tip">Interview tip: Walk through any of these scripts explaining WHAT each line does and WHY. Show you understand the logic, not just copied it. "I use try/catch because bulk operations always have failures - locked accounts, licensing conflicts - and I need to log which ones failed without stopping the whole batch."</div>
+`
+    },
+    {
+      id: 'ps-patterns',
+      title: 'Automation Patterns & Error Handling',
+      content: `
+<h4>Error handling pattern</h4>
+<pre>function Do-BulkOperation {
+    param([string[]]$Users)
+
+    $results = @()
+    foreach ($user in $Users) {
+        try {
+            # Operation here
+            $results += [PSCustomObject]@{User=$user; Status="Success"; Error=""}
+        } catch {
+            $results += [PSCustomObject]@{User=$user; Status="Failed"; Error=$_.Exception.Message}
+            Write-Warning "Failed for $user : $_"
+        }
+    }
+
+    # Summary
+    $success = ($results | Where Status -eq "Success").Count
+    $failed = ($results | Where Status -eq "Failed").Count
+    Write-Host "Complete: $success success, $failed failed"
+
+    # Export failures for review
+    $results | Where Status -eq "Failed" | Export-Csv "failures.csv" -NoTypeInformation
+    return $results
+}</pre>
+
+<h4>Logging pattern</h4>
+<pre>$logFile = "C:\\Logs\\script_$(Get-Date -Format yyyyMMdd_HHmmss).log"
+
+function Write-Log {
+    param([string]$Message, [string]$Level = "INFO")
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $entry = "[$timestamp] [$Level] $Message"
+    Add-Content -Path $logFile -Value $entry
+    if ($Level -eq "ERROR") { Write-Host $entry -ForegroundColor Red }
+    else { Write-Host $entry }
+}
+
+Write-Log "Script started"
+Write-Log "Failed to process user" -Level "ERROR"</pre>
+
+<h4>Scheduled automation pattern</h4>
+<pre># For unattended scripts, use certificate-based auth (no password stored)
+# Register app in Entra ID with certificate
+Connect-MgGraph -ClientId $appId -TenantId $tenantId -CertificateThumbprint $thumbprint
+
+# Schedule with Task Scheduler:
+# Action: powershell.exe -ExecutionPolicy Bypass -File "C:\\Scripts\\DailyReport.ps1"
+# Trigger: Daily at 6:00 AM
+# Run as: service account with appropriate permissions</pre>
+
+<h4>Pipeline patterns for interviews</h4>
+<pre># Filter + Select + Export (the bread and butter)
+Get-MgUser -All | Where-Object { $_.Department -eq "IT" } |
+  Select-Object DisplayName, JobTitle, UserPrincipalName |
+  Export-Csv "IT_Users.csv" -NoTypeInformation
+
+# ForEach with progress
+$users = Get-MgUser -All
+$total = $users.Count
+$i = 0
+foreach ($user in $users) {
+    $i++
+    Write-Progress -Activity "Processing" -Status "$i of $total" -PercentComplete (($i/$total)*100)
+    # do work
+}
+
+# Splatting (clean parameter passing)
+$params = @{
+    UserId = "user@domain.com"
+    AddLicenses = @(@{SkuId = $skuId})
+    RemoveLicenses = @()
+}
+Set-MgUserLicense @params</pre>
+
+<div class="interview-tip">Interview tip: "My scripts always include error handling with try/catch, logging to a file for audit trail, and a summary output. For scheduled automation, I use certificate-based authentication so there are no passwords in scripts or credential files."</div>
+`
+    }
+  ]
+},
+{
+  id: 'security',
+  name: '06 Security & Compliance',
+  desc: 'Incident response, Identity Protection, monitoring, baselines',
+  topics: [
+    {
+      id: 'sec-incident-response',
+      title: 'Compromised Account Response',
+      content: `
+<h4>The playbook (memorize this order)</h4>
+<pre>IMMEDIATE (within minutes):
+1. Reset password
+2. Revoke all sessions (Revoke-MgUserSignInSession)
+3. Disable account if severity warrants
+
+INVESTIGATE (within 1 hour):
+4. Check sign-in logs - where did attacker sign in from?
+5. Check inbox rules - forwarding to external? auto-delete?
+6. Check OAuth app consents - malicious apps granted access?
+7. Check mailbox delegates - added themselves as delegate?
+8. Check sent items - did they phish internal users?
+
+REMEDIATE:
+9. Remove malicious inbox rules (Get-InboxRule | Remove-InboxRule)
+10. Remove suspicious OAuth consents
+11. Remove unknown delegates
+12. Enable MFA if not already enabled
+13. Force password change on next sign-in
+
+PREVENT RECURRENCE:
+14. Review Conditional Access gaps
+15. Block legacy auth if not already
+16. Add user to "high-risk" monitoring group
+17. Document incident and lessons learned</pre>
+
+<h4>Key PowerShell for incident response</h4>
+<pre># Revoke all sessions
+Revoke-MgUserSignInSession -UserId "compromised@domain.com"
+
+# Check inbox rules (forwarding is #1 persistence method)
+Connect-ExchangeOnline
+Get-InboxRule -Mailbox "compromised@domain.com" |
+  Where {$_.ForwardTo -or $_.RedirectTo -or $_.DeleteMessage} |
+  Select Name, ForwardTo, RedirectTo, DeleteMessage
+
+# Check OAuth app consents
+Get-MgUserOauth2PermissionGrant -UserId "compromised@domain.com"
+
+# Check sign-in logs
+Get-MgAuditLogSignIn -Filter "userPrincipalName eq 'compromised@domain.com'" -Top 50 |
+  Select CreatedDateTime, IpAddress, Location, Status</pre>
+
+<h4>Common attack patterns</h4>
+<pre>1. Phishing -> credential harvesting -> mailbox access
+   Signs: impossible travel, inbox forwarding rules, mass email sent
+
+2. Password spray -> single account compromised -> lateral movement
+   Signs: many failed logins across accounts, then 1 success
+
+3. OAuth consent phishing -> malicious app gets mail.read
+   Signs: suspicious app in enterprise apps, unusual consent grants
+
+4. MFA fatigue -> user approves push after repeated prompts
+   Signs: multiple MFA denials then an approval (number matching stops this)</pre>
+
+<div class="interview-tip">Interview tip: "When I get an alert for a compromised account, my first actions are reset password and revoke sessions - stop the bleeding. Then I investigate inbox rules because that's how attackers maintain persistence after a password reset. If they added a forwarding rule, they still get copies of every email even after we lock them out."</div>
+`
+    },
+    {
+      id: 'sec-identity-protection',
+      title: 'Entra Identity Protection & Risk Policies',
+      content: `
+<h4>What it is</h4>
+<p>Identity Protection (Entra ID P2) uses Microsoft's ML to detect risky sign-ins and users. Even with E3 (P1 only), you can SEE risk in sign-in logs - you just can't automate response with risk policies.</p>
+
+<h4>Risk types</h4>
+<pre>SIGN-IN RISK (this specific login is suspicious):
+  - Anonymous IP (TOR, VPN)
+  - Atypical travel (impossible travel)
+  - Malware-linked IP
+  - Unfamiliar sign-in properties
+  - Password spray detected
+  - Token anomaly
+
+USER RISK (this account may be compromised):
+  - Leaked credentials (found on dark web)
+  - Threat intelligence (Microsoft internal signals)
+  - Anomalous user activity</pre>
+
+<h4>What you can do with P1 (E3)</h4>
+<ul>
+<li>View risky sign-ins in Entra ID > Security > Risky sign-ins</li>
+<li>Use Conditional Access with sign-in risk as a condition (limited)</li>
+<li>Manually investigate and remediate</li>
+</ul>
+
+<h4>What you could do with P2 (E5 or add-on)</h4>
+<ul>
+<li>Risk-based Conditional Access (auto-require MFA on medium risk, block on high)</li>
+<li>User risk policy (auto-force password change on high user risk)</li>
+<li>Risk investigation workbook</li>
+<li>Automated remediation</li>
+</ul>
+
+<h4>Sign-in log investigation</h4>
+<pre>For every suspicious sign-in, check:
+  - IP address (known corporate range or unknown?)
+  - Location (does it make geographic sense?)
+  - Device (managed/compliant or unknown?)
+  - Client app (browser, desktop app, legacy protocol?)
+  - MFA result (satisfied, failed, not required?)
+  - CA policies applied (which ones triggered?)</pre>
+
+<div class="interview-tip">Interview tip: "With E3 I can see risk signals in sign-in logs and build CA policies that respond to some risk levels. If we needed automated risk response - like auto-forcing password reset when leaked credentials are detected - I'd recommend the P2 add-on. But even with P1, I'd set up weekly reviews of the risky sign-ins report and investigate anything flagged."</div>
+`
+    },
+    {
+      id: 'sec-monitoring',
+      title: 'Security Monitoring & Alerts',
+      content: `
+<h4>What to monitor (weekly review checklist)</h4>
+<pre>DAILY:
+  [ ] Risky sign-ins report (any high-risk?)
+  [ ] CA policy failures (legitimate users blocked?)
+  [ ] MFA registration changes (someone removing MFA?)
+
+WEEKLY:
+  [ ] New Global Admin or privileged role assignments
+  [ ] New Conditional Access policy changes
+  [ ] Guest user additions
+  [ ] App consent grants
+  [ ] Mailbox forwarding rules (new external forwarding)
+  [ ] Device compliance drift (non-compliant spike?)
+
+MONTHLY:
+  [ ] License utilization (unused licenses to reclaim)
+  [ ] Stale accounts (no sign-in > 90 days)
+  [ ] Group membership review (privileged groups)
+  [ ] Security Secure Score review</pre>
+
+<h4>Microsoft 365 Defender portal</h4>
+<pre>security.microsoft.com
+  Incidents & Alerts - correlated security events
+  Hunting - KQL queries across all M365 data
+  Secure Score - security posture rating with recommendations
+  Reports - pre-built security reports</pre>
+
+<h4>Alert policies to enable</h4>
+<pre>Built-in alerts (already on in E3):
+  - Elevation of privilege (new admin)
+  - Malware campaign detected
+  - Unusual external user activity
+  - eDiscovery search started
+
+Custom alerts to create:
+  - CA policy modified
+  - Break-glass account sign-in
+  - Bulk user deletion (>5 users)
+  - External forwarding rule created</pre>
+
+<h4>Microsoft Secure Score</h4>
+<p>A percentage score of your security posture. Each recommendation has points. Common quick wins:</p>
+<pre>+10: Enable security defaults or CA MFA policy
++8:  Block legacy authentication
++5:  Require MFA for admins
++5:  Disable user consent to apps
++3:  Enable mailbox auditing (on by default now)
++3:  Set password expiration policy (or better: ban common passwords)</pre>
+
+<div class="interview-tip">Interview tip: "I check Secure Score weekly and use it to prioritize security improvements. I set up custom alerts for high-impact changes like new admin role assignments and CA policy modifications. These are the changes that could silently weaken our security posture if made by a compromised admin account."</div>
+`
+    }
+  ]
+},
+{
+  id: 'avd',
+  name: '07 Virtual Desktop (AVD)',
+  desc: 'Azure Virtual Desktop architecture, FSLogix, scaling',
+  topics: [
+    {
+      id: 'avd-architecture',
+      title: 'AVD Architecture & Components',
+      content: `
+<h4>What it is</h4>
+<p>Azure Virtual Desktop (AVD) provides Windows desktops and apps running on Azure VMs. Users connect via client or browser. Microsoft manages the control plane; you manage the VMs.</p>
+
+<h4>Architecture components</h4>
+<pre>MICROSOFT MANAGED (control plane):
+  - Web Access (gateway/broker)
+  - Connection broker (routes users to session hosts)
+  - Diagnostics
+  - Load balancing
+
+YOU MANAGE (data plane):
+  - Host Pools (collection of session host VMs)
+  - Session Hosts (Windows VMs users connect to)
+  - Application Groups (what users see)
+  - Workspaces (logical grouping for users)
+  - Networking (VNet, NSG, connectivity to on-prem)
+  - User profiles (FSLogix on Azure Files)</pre>
+
+<h4>Key concepts</h4>
+<pre>HOST POOL types:
+  Pooled   - multiple users share VMs (most cost-effective)
+           - load balanced: breadth-first or depth-first
+  Personal - each user gets dedicated VM (persistent state)
+           - use for developers, power users
+
+APPLICATION GROUP types:
+  Desktop  - full Windows desktop experience
+  RemoteApp - individual published apps (just the app window, no desktop)
+
+SESSION HOST OS:
+  Windows 10/11 Multi-session - unique to AVD, multiple users on one Windows client OS
+  Windows Server - traditional RDS multi-session</pre>
+
+<h4>FSLogix profile containers</h4>
+<pre>Problem: In pooled host pools, users land on different VMs each time.
+         Their profile (settings, data) needs to follow them.
+
+Solution: FSLogix stores user profile in a VHD on Azure Files.
+          On login: VHD mounts -> profile loads -> user gets their settings
+          On logoff: changes saved back to VHD
+
+Storage: Azure Files with AD authentication
+  - Standard tier for most users
+  - Premium tier for heavy users (faster IOPS)
+  - Recommend: separate file share per host pool</pre>
+
+<h4>Scaling</h4>
+<pre>Autoscale (built-in):
+  - Ramp-up: start VMs before business hours
+  - Peak: all VMs running, breadth-first balancing
+  - Ramp-down: start draining sessions, deallocate empty VMs
+  - Off-peak: minimum VMs running
+
+Cost optimization:
+  - Reserved Instances for base capacity (1yr or 3yr commit)
+  - Start/Stop on schedule for dev/test pools
+  - Use smaller VMs with more instances vs fewer large VMs</pre>
+
+<h4>Networking for AVD</h4>
+<pre>- Session hosts need line-of-sight to AD DC (for domain join)
+- VNet peered or connected to on-prem (VPN/ExpressRoute)
+- NSG: allow outbound to AVD service (service tag), block unnecessary inbound
+- No public IPs on session hosts
+- Users connect through AVD gateway (Microsoft-managed, internet-facing)</pre>
+
+<div class="interview-tip">Interview tip: "I understand AVD architecture - host pools, session hosts, FSLogix on Azure Files, and the autoscale model. My practical experience is with physical Windows desktops and VMware-adjacent virtual environments. I can ramp quickly on AVD because the underlying Windows management, networking, and user profile concepts are the same - it's the delivery mechanism that's different."</div>
+`
+    }
+  ]
+}
+];
+
+// App logic
+let currentDomain = 0;
+let completedTopics = JSON.parse(localStorage.getItem('skillpath_completed') || '{}');
+
+function getStats() {
+  let total = 0, complete = 0;
+  DATA.forEach(d => { d.topics.forEach(t => { total++; if (completedTopics[t.id]) complete++; }); });
+  return { total, complete, percent: total ? Math.round((complete/total)*100) : 0 };
+}
+
+function getDomainProgress(domain) {
+  let total = domain.topics.length;
+  let complete = domain.topics.filter(t => completedTopics[t.id]).length;
+  return { total, complete, percent: total ? Math.round((complete/total)*100) : 0 };
+}
+
+function updateStats() {
+  const s = getStats();
+  document.getElementById('stat-total').textContent = s.total;
+  document.getElementById('stat-complete').textContent = s.complete;
+  document.getElementById('stat-percent').textContent = s.percent;
+}
+
+function renderSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.innerHTML = DATA.map((d, i) => {
+    const p = getDomainProgress(d);
+    return `<div class="domain-item ${i === currentDomain ? 'active' : ''}" onclick="selectDomain(${i})">
+      <div class="domain-name">${d.name}</div>
+      <div class="domain-progress">${p.complete}/${p.total} topics</div>
+      <div class="progress-bar"><div class="fill" style="width:${p.percent}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderMain(filter) {
+  const domain = DATA[currentDomain];
+  const main = document.getElementById('main');
+  let topics = domain.topics;
+  if (filter) {
+    topics = topics.filter(t => t.title.toLowerCase().includes(filter) || t.content.toLowerCase().includes(filter));
+  }
+  main.innerHTML = `
+    <div class="domain-header">
+      <h2>${domain.name}</h2>
+      <p>${domain.desc}</p>
+    </div>
+    ${topics.map(t => `
+      <div class="topic ${completedTopics[t.id] ? 'completed' : ''}" id="topic-${t.id}">
+        <div class="topic-header" onclick="toggleTopic('${t.id}')">
+          <div class="topic-check ${completedTopics[t.id] ? 'checked' : ''}" onclick="event.stopPropagation(); toggleComplete('${t.id}')"></div>
+          <div class="topic-title">${t.title}</div>
+          <div class="topic-expand">[+]</div>
+        </div>
+        <div class="topic-content" id="content-${t.id}">${t.content}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function selectDomain(i) {
+  currentDomain = i;
+  renderSidebar();
+  renderMain();
+}
+
+function toggleTopic(id) {
+  const el = document.getElementById('content-' + id);
+  el.classList.toggle('open');
+  const expand = el.previousElementSibling.querySelector('.topic-expand');
+  expand.textContent = el.classList.contains('open') ? '[-]' : '[+]';
+}
+
+function toggleComplete(id) {
+  completedTopics[id] = !completedTopics[id];
+  localStorage.setItem('skillpath_completed', JSON.stringify(completedTopics));
+  updateStats();
+  renderSidebar();
+  renderMain();
+}
+
+// Search
+document.getElementById('search').addEventListener('input', function(e) {
+  const q = e.target.value.toLowerCase().trim();
+  if (!q) { renderMain(); return; }
+  // Search across all domains
+  const main = document.getElementById('main');
+  let results = [];
+  DATA.forEach((d, di) => {
+    d.topics.forEach(t => {
+      if (t.title.toLowerCase().includes(q) || t.content.toLowerCase().includes(q)) {
+        results.push({ ...t, domainName: d.name, domainIndex: di });
+      }
+    });
+  });
+  main.innerHTML = `
+    <div class="domain-header">
+      <h2>Search: "${e.target.value}"</h2>
+      <p>${results.length} results</p>
+    </div>
+    ${results.map(t => `
+      <div class="topic ${completedTopics[t.id] ? 'completed' : ''}">
+        <div class="topic-header" onclick="toggleTopic('${t.id}')">
+          <div class="topic-check ${completedTopics[t.id] ? 'checked' : ''}" onclick="event.stopPropagation(); toggleComplete('${t.id}')"></div>
+          <div class="topic-title"><span style="color:var(--dim)">${t.domainName} ></span> ${t.title}</div>
+          <div class="topic-expand">[+]</div>
+        </div>
+        <div class="topic-content" id="content-${t.id}">${t.content}</div>
+      </div>
+    `).join('')}
+  `;
+});
+
+// Keyboard shortcut
+document.addEventListener('keydown', function(e) {
+  if (e.key === '/' && e.target.tagName !== 'INPUT') {
+    e.preventDefault();
+    document.getElementById('search').focus();
+  }
+});
+
+// Init
+renderSidebar();
+renderMain();
+updateStats();
+</script>
+</body>
+</html>
