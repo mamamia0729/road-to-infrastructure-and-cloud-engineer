@@ -832,6 +832,489 @@ License Admin               Manage license assignments</pre>
 
 <div class="interview-tip">Interview tip: "I follow least privilege strictly. Day-to-day I'd use a standard user account and only elevate when needed. For the team, I'd assign scoped roles - Exchange Admin for the mail team, Intune Admin for desktop support - rather than giving everyone Contributor or Global Admin."</div>
 `
+    },
+    {
+      id: 'entra-sso-setup',
+      title: 'SSO Setup - Autodesk, Bluebeam, Adobe (Real-World Walkthrough)',
+      content: `
+<h4>What is SSO</h4>
+<p>Single Sign-On means users log in once with their Entra ID credentials and get access to all their apps - Autodesk, Adobe, Bluebeam, Salesforce, whatever - without entering separate passwords for each. Under the hood, Entra ID acts as the Identity Provider (IdP). When a user opens Autodesk, Autodesk says "who are you?" and redirects to Entra ID. Entra ID says "I know this person, here's a token proving it." Autodesk trusts that token and lets the user in.</p>
+
+<h4>The two SSO protocols (know both)</h4>
+<pre>SAML 2.0 (Security Assertion Markup Language):
+  How it works:
+    1. User opens app (e.g., autodesk.com) - this is the Service Provider (SP)
+    2. App redirects browser to Entra ID with a SAML Request (XML)
+    3. Entra ID authenticates user (password, MFA, whatever CA policy requires)
+    4. Entra ID sends browser back to app with a SAML Response (XML)
+    5. SAML Response contains an Assertion - a signed XML document that says:
+       "This is john@company.com, first name John, last name Smith,
+        signed by Entra ID at 2026-05-13T10:30:00Z, valid for 5 minutes"
+    6. App validates the signature using Entra ID's certificate
+    7. App creates a session for the user
+
+  Key terms:
+    Identity Provider (IdP) = Entra ID (the one doing the authenticating)
+    Service Provider (SP) = the app (Autodesk, Adobe, etc.)
+    Assertion = the signed proof of identity
+    Entity ID = unique identifier for the SP (like a name tag)
+    ACS URL (Assertion Consumer Service) = where Entra ID sends the SAML Response
+    Reply URL = same as ACS URL (Microsoft's term)
+    Claims = attributes sent in the assertion (email, name, groups)
+    NameID = the primary identifier (usually email or UPN)
+    Signing Certificate = Entra ID signs assertions with this cert, app verifies with it
+
+OIDC (OpenID Connect):
+  How it works:
+    1. User opens app
+    2. App redirects to Entra ID's /authorize endpoint
+    3. Entra ID authenticates user
+    4. Entra ID returns an authorization code to the app's redirect URI
+    5. App exchanges code for tokens (ID token + access token)
+    6. ID token is a JWT (JSON Web Token) containing user claims
+    7. App validates the JWT and creates a session
+
+  Key terms:
+    ID Token = JWT with user identity claims (like SAML assertion but JSON)
+    Access Token = JWT for calling APIs on behalf of user
+    Redirect URI = where Entra ID sends the auth code (like ACS URL)
+    Scopes = what the app is requesting (openid, profile, email)
+    Client ID = the app's unique ID in Entra ID
+    Client Secret = the app's password for token exchange
+
+WHEN TO USE WHICH:
+  SAML: Most enterprise SaaS apps (Autodesk, Adobe, Salesforce, ServiceNow)
+  OIDC: Modern apps, apps that prefer it (Bluebeam), custom-built apps
+  Rule: Use whatever the vendor supports. You don't choose - the app dictates.</pre>
+
+<h4>Enterprise Applications in Entra ID</h4>
+<pre>WHERE SSO LIVES:
+  Entra admin center > Applications > Enterprise applications
+
+  This is the catalog of every app integrated with your tenant.
+  Each app has:
+    - Properties (name, logo, enabled/disabled)
+    - Users and groups (who is assigned - controls who can access)
+    - Single sign-on (SAML or OIDC configuration)
+    - Provisioning (SCIM - auto-create users in the app)
+    - Conditional Access (which CA policies apply)
+
+GALLERY APP (pre-configured):
+  1. Enterprise apps > New application
+  2. Search the gallery (thousands of pre-configured apps)
+  3. Select app - SAML settings are pre-filled (Entity ID, claims, etc.)
+  4. You still need to configure your specific URLs and assign users
+
+NON-GALLERY APP (custom):
+  1. Enterprise apps > New application > Create your own application
+  2. "Integrate any other application you don't find in the gallery"
+  3. Everything is manual - you enter all SAML/OIDC settings yourself
+
+ASSIGNING USERS (critical step people forget):
+  By default, "User assignment required" = Yes
+  This means ONLY users/groups you assign can access the app
+  If a user tries SSO but isn't assigned = error AADSTS50105
+
+  Best practice: Assign a security group (e.g., GRP-App-Autodesk-Users)
+  Use dynamic group if possible (all users in Design department get Autodesk)</pre>
+
+<h4>CLAIMS - What gets sent to the app</h4>
+<pre>When Entra ID sends the SAML assertion or OIDC token, it includes CLAIMS.
+Claims are key-value pairs of user attributes. The app needs specific claims
+to identify and set up the user.
+
+DEFAULT CLAIMS (always sent):
+  NameID / Unique User Identifier = user.userprincipalname (default, can change)
+
+COMMON ADDITIONAL CLAIMS:
+  Claim Name       Source Attribute         What it is
+  email            user.mail                User's email address
+  firstName        user.givenname           First name
+  lastName         user.surname             Last name
+  displayName      user.displayname         Full display name
+  department       user.department          Department
+  groups           group IDs               Security groups user belongs to
+
+HOW TO CONFIGURE CLAIMS:
+  1. Enterprise app > Single sign-on > Attributes & Claims > Edit
+  2. Click on a claim to modify its source attribute
+  3. Add new claims with "+ Add new claim"
+  4. For NameID: click "Unique User Identifier" to change format
+     - user.userprincipalname (default, works when UPN = email)
+     - user.mail (use when UPN doesn't match email)
+     - user.objectid (permanent, never changes - some apps prefer this)
+
+NAMEID FORMAT:
+  Email address format:    john@company.com
+  Persistent identifier:   opaque GUID (doesn't change if user renames)
+  Unspecified:             whatever value you map (most flexible)
+
+  Most apps want: Email address format with user.mail or user.userprincipalname</pre>
+
+<h4>REAL-WORLD SSO SETUP: AUTODESK</h4>
+<pre>Protocol: SAML 2.0
+Gallery app: Yes - search "Autodesk SSO"
+Backend: Autodesk uses Okta as their SAML broker
+
+WHO DOES WHAT:
+  You (Entra ID admin): Configure the IdP side
+  Autodesk admin: Configure the SP side in manage.autodesk.com
+  Both sides must match or SSO fails
+
+STEP-BY-STEP:
+
+1. ADD THE GALLERY APP
+   Entra admin center > Enterprise apps > New application
+   Search "Autodesk SSO" > select it > Create
+   Wait for the app to be created in your tenant
+
+2. CONFIGURE SAML (Entra ID side)
+   Go to: Enterprise app > Autodesk SSO > Single sign-on > SAML
+
+   Section 1 - Basic SAML Configuration:
+     Identifier (Entity ID): https://www.okta.com/saml2/service-provider/[UNIQUE_ID]
+     Reply URL (ACS):        https://autodesk-prod.okta.com/sso/saml2/[UNIQUE_ID]
+     Sign-on URL:            https://autodesk-prod.okta.com/sso/saml2/
+
+     NOTE: The [UNIQUE_ID] comes from Autodesk. You get it from the Autodesk
+     Account portal during their side of setup. Or use metadata exchange (easier).
+
+   METADATA EXCHANGE METHOD (recommended):
+     a. In Entra ID, scroll to Section 3 > download "Federation Metadata XML"
+     b. Upload this XML to Autodesk Account portal
+     c. Autodesk gives you their metadata back
+     d. Upload Autodesk metadata to Entra ID - auto-fills Entity ID and Reply URL
+
+   Section 2 - Attributes & Claims:
+     Keep defaults, then add:
+     firstName  = user.givenname
+     lastName   = user.surname
+     email      = user.mail
+     objectGUID = user.objectid
+
+   Section 3 - SAML Signing Certificate:
+     Download "Certificate (Base64)" - you'll upload this to Autodesk
+
+   Section 4 - Set up Autodesk SSO:
+     Copy these three URLs:
+     Login URL:           https://login.microsoftonline.com/[tenant-id]/saml2
+     Azure AD Identifier: https://sts.windows.net/[tenant-id]/
+     Logout URL:          https://login.microsoftonline.com/[tenant-id]/saml2
+
+3. CONFIGURE AUTODESK SIDE
+   Log into manage.autodesk.com as Primary Admin or SSO Admin
+   Settings > SSO Configuration
+   Upload the Certificate (Base64) from Entra ID
+   Enter the Login URL, Identifier, and Logout URL from Entra ID
+   Or: upload the Federation Metadata XML (does it all at once)
+   Test the connection - Autodesk sends a test SAML request
+
+4. LINK YOUR DOMAIN
+   In Autodesk Account, link your verified domain (company.com)
+   This tells Autodesk: "anyone with @company.com should SSO through Entra ID"
+
+5. ASSIGN USERS IN ENTRA ID
+   Enterprise app > Autodesk SSO > Users and groups > Add user/group
+   Assign: GRP-App-Autodesk-Users (security group)
+   Only members of this group can SSO into Autodesk
+
+6. CONFIGURE SCIM PROVISIONING (optional but recommended)
+   Autodesk supports SCIM - auto-create/update/disable users
+   In Autodesk: User Management > Directory Sync > Microsoft Entra SCIM
+   Copy the Base URL and API Token
+   In Entra ID: Enterprise app > Autodesk SSO > Provisioning
+   Mode: Automatic
+   Tenant URL: [paste Base URL]
+   Secret Token: [paste API token]
+   Test connection > Save > Start provisioning
+
+7. TEST SSO
+   Open browser in incognito
+   Go to autodesk.com > Sign in
+   Enter user@company.com
+   Should redirect to Microsoft login
+   After MFA, should land in Autodesk dashboard</pre>
+
+<h4>REAL-WORLD SSO SETUP: BLUEBEAM</h4>
+<pre>Protocol: OIDC (NOT SAML - Bluebeam doesn't support SAML)
+Gallery app: No - configuration is done in Bluebeam's Org Admin portal
+Minimum requirement: 10+ subscription seats
+
+THIS IS DIFFERENT FROM MOST APPS:
+  Bluebeam doesn't use the Entra ID gallery.
+  Instead, you configure SSO FROM the Bluebeam portal.
+  Bluebeam's portal connects TO your Entra ID via OIDC consent.
+
+STEP-BY-STEP:
+
+1. PREPARE USER LIST
+   Before you start, export your users from Entra ID:
+     Get-MgUser -All | Select GivenName, Surname, Mail, UserPrincipalName |
+       Export-Csv "bluebeam_users.csv" -NoTypeInformation
+
+   Download Bluebeam's CSV template from the Org Admin portal
+   Map your fields:
+     givenName -> firstName
+     surname   -> lastName
+     mail or userPrincipalName -> email (choose one - this matters later)
+
+2. REQUEST SSO ACCESS
+   Bluebeam Org Admin portal > Settings
+   Click "Request Access" next to SSO Configuration
+   Wait for Bluebeam to enable SSO for your org
+
+3. CONFIGURE SSO IN BLUEBEAM
+   Org Admin > Settings > SSO Configuration
+   Select "Microsoft" as identity provider
+   Browser opens Entra ID consent prompt
+   Sign in as Entra ID admin (Global Admin or Application Admin)
+   Grant consent to Bluebeam's application permissions
+     (This registers Bluebeam as an Enterprise App in your Entra ID automatically)
+
+4. CRITICAL DECISION: EMAIL ATTRIBUTE
+   Bluebeam asks: use "email" (user.mail) or "upn" (user.userPrincipalName)?
+
+   Choose "email" if: Your users' mail attribute matches their Bluebeam email
+   Choose "upn" if:   Your users' UPN matches their Bluebeam email
+
+   COMMON MISTAKE: Choosing wrong one. If user.mail is john@company.com
+   but UPN is jsmith@company.onmicrosoft.com, picking "upn" will fail.
+   Usually "email" is the right choice.
+
+5. SPECIFY DOMAINS
+   Enter your organization's email domains (company.com)
+   Bluebeam routes these domains through your Entra ID SSO
+
+6. UPLOAD USER CSV
+   Upload the prepared CSV file
+   Bluebeam reconciles: matches Entra IDs to existing Bluebeam accounts
+   Review unmatched users (may need manual matching)
+
+7. ACTIVATE SSO
+   After reconciliation, activate SSO
+   Users now log in with Entra ID credentials
+
+8. SETUP SCIM PROVISIONING (separate step)
+   SSO must be active first
+   Create Entra ID groups for Bluebeam plan tiers:
+     GRP-Bluebeam-Core, GRP-Bluebeam-Complete, etc.
+
+   In Bluebeam Org Admin > Settings > SCIM Provisioning > Configure
+   Copy SCIM Base URL and generate token
+
+   In Entra ID:
+     Enterprise apps > New application > "Create your own" (non-gallery)
+     Name it "Bluebeam SCIM"
+     Provisioning > Automatic
+     Tenant URL: [SCIM Base URL]
+     Secret Token: [token]
+
+   CRITICAL: Edit attribute mappings:
+     Remove: addresses, phoneNumbers, displayName, title, name.formatted
+     Keep: userName, name.givenName, name.familyName, active, externalId
+     userName source MUST match SSO choice:
+       If SSO uses "email" -> userName = user.mail
+       If SSO uses "upn" -> userName = user.userPrincipalName
+     If these don't match, provisioning silently fails.
+
+   Assign groups > Start provisioning</pre>
+
+<h4>REAL-WORLD SSO SETUP: ADOBE</h4>
+<pre>Protocol: SAML 2.0 or OIDC (Adobe supports both)
+Gallery app: Yes - "Adobe Identity Management (SAML)" or "(OIDC)"
+Recommended: OIDC path (Adobe calls it "Azure AD Connector") - simpler setup
+
+ADOBE IDENTITY TYPES (understand this first):
+  Adobe ID:       User-created, Adobe-managed. Personal accounts. NOT for SSO.
+  Enterprise ID:  Org-created, Adobe-hosted. Org controls account but Adobe authenticates.
+  Federated ID:   Org-created, org authenticates via SSO. THIS IS WHAT YOU WANT.
+
+  SSO requires FEDERATED ID. Users must be Federated ID type in Adobe Admin Console.
+  If users currently have Adobe IDs, they must be converted to Federated IDs.
+
+STEP-BY-STEP (OIDC PATH - recommended):
+
+1. CREATE FEDERATED DIRECTORY IN ADOBE
+   Log into adminconsole.adobe.com as System Admin
+   Settings > Identity > Directories > Create Directory
+   Name: "Company Entra ID" (descriptive name)
+   Type: Federated ID
+   Identity Provider: Select "Microsoft Azure"
+   Click "Next"
+
+2. CONNECT TO ENTRA ID
+   Adobe redirects to Microsoft login
+   Sign in as Entra ID admin (Global Admin or Application Admin)
+   Grant consent to Adobe's requested permissions
+   Adobe reads your tenant info automatically
+   Click "Create" - the directory is linked
+
+   What just happened: Adobe registered itself as an Enterprise Application
+   in your Entra ID. You can see it in Enterprise apps now.
+
+3. CLAIM AND VERIFY DOMAINS
+   Settings > Identity > Directories > [your directory] > Domains
+   Click "Add domain"
+   With Azure AD Connector, Adobe can pull verified domains from your Entra ID
+   Select your domain (company.com)
+
+   OR manually verify:
+   Enter domain name
+   Adobe gives you a DNS TXT record value
+   Add the TXT record to your public DNS
+   Click "Verify" in Adobe - checks DNS
+   This proves you own the domain
+
+   IMPORTANT: A domain can only be claimed by ONE Adobe org globally.
+   If another org already claimed company.com, you must contact Adobe support.
+
+4. CONFIGURE USER PROVISIONING
+   Adobe Admin Console > Settings > Identity > [directory] > Sync tab
+   Add Sync > "Sync users from Microsoft Azure"
+   Adobe shows Tenant URL and Secret Token
+   Copy both
+
+   In Entra ID:
+   Enterprise apps > Adobe Identity Management > Provisioning
+   Mode: Automatic
+   Tenant URL: [paste]
+   Secret Token: [paste]
+   Test connection > Save
+
+   Configure attribute mappings:
+   userPrincipalName or mail -> email (must match how users log in)
+   givenName -> firstName
+   surname -> lastName
+
+   Assign user groups > Start provisioning
+
+5. ASSIGN PRODUCT PROFILES
+   Adobe Admin Console > Products
+   Select product (e.g., Creative Cloud All Apps)
+   Add users or groups to product profiles
+   This controls which Adobe products users can access
+   SSO handles authentication. Product profiles handle licensing.
+
+6. TEST SSO
+   Open incognito browser
+   Go to adobe.com > Sign in
+   Enter user@company.com
+   Adobe detects federated domain, redirects to Microsoft login
+   After auth, user lands in Adobe with their assigned products
+
+STEP-BY-STEP (SAML PATH - if needed):
+
+1. CREATE DIRECTORY
+   Same as OIDC steps 1, but select "Other SAML Providers" instead of Microsoft Azure
+
+2. NOTE ADOBE'S SAML INFO
+   Adobe shows:
+   ACS URL: https://federatedid-na1.services.adobe.com/federated/saml/metadata/alias/[ID]
+   Entity ID: same pattern
+   Copy both
+
+3. ADD GALLERY APP IN ENTRA ID
+   Enterprise apps > New application > "Adobe Identity Management (SAML)"
+   Single sign-on > SAML
+
+   Basic SAML Configuration:
+   Identifier (Entity ID): [paste Adobe's Entity ID]
+   Reply URL (ACS): [paste Adobe's ACS URL]
+   Sign-on URL: https://adobe.com
+
+   Attributes & Claims:
+   NameID: user.mail (email address format)
+   FirstName: user.givenname
+   LastName: user.surname
+   Email: user.mail
+
+4. EXCHANGE CERTIFICATES
+   Download Federation Metadata XML from Entra ID
+   Upload to Adobe Admin Console
+   Adobe validates and completes the SAML configuration
+
+5. DOMAIN VERIFICATION
+   Same as OIDC step 3
+
+6. ASSIGN USERS AND TEST
+   Same as OIDC steps 4-6</pre>
+
+<h4>TROUBLESHOOTING SSO (all apps)</h4>
+<pre>TOOL: SAML-TRACER BROWSER EXTENSION
+  Install "SAML-tracer" extension in Chrome or Firefox
+  It captures every SAML request and response in real-time
+  Look for: the SAMLResponse, decode it (base64), read the assertion
+  Check: Is NameID correct? Are claims present? Is signature valid?
+
+TOOL: ENTRA ID TEST BUTTON
+  Enterprise app > Single sign-on > Test this application
+  Sign in as test user
+  Entra ID shows success or detailed error with fix guidance
+
+COMMON ERRORS AND FIXES:
+
+"AADSTS50105 - User not assigned to a role"
+  Cause: User is not assigned to the Enterprise App in Entra ID
+  Fix: Enterprise app > Users and groups > Add the user or their group
+
+"AADSTS70001 - Application not found in the directory"
+  Cause: Entity ID in the SAML request doesn't match what's configured
+  Fix: Check for trailing slashes, exact URL match in Basic SAML Config
+
+"Certificate validation failed"
+  Cause: Signing cert expired or wrong cert uploaded to app
+  Fix: Download fresh certificate from Entra ID, re-upload to app
+
+"NameID mismatch" / "User not found in application"
+  Cause: NameID format or value doesn't match what the app expects
+  Fix: In Entra ID claims config, change NameID source:
+       user.userprincipalname -> user.mail (or vice versa)
+       Match what the app is looking for
+
+"Infinite redirect loop"
+  Cause: Reply URL is wrong - Entra sends response, app doesn't recognize it, redirects back
+  Fix: Verify Reply URL exactly matches what the app expects (check ACS URL)
+
+"SAML Response is not valid / signature invalid"
+  Cause: App doesn't have the correct Entra ID signing certificate
+  Fix: Re-download cert from Entra ID, re-upload to app
+
+"User can SSO but has no access/products"
+  Cause: SSO handles authentication, NOT authorization
+  Fix: Assign licenses/products in the app's admin console
+       (Adobe product profiles, Autodesk subscriptions, Bluebeam plan tiers)</pre>
+
+<h4>SSO LIFECYCLE MANAGEMENT</h4>
+<pre>ONGOING MAINTENANCE:
+
+Certificate rotation (do this BEFORE it expires):
+  1. Entra ID SAML signing certs expire (default 3 years)
+  2. 30 days before expiry: create new certificate in Entra ID
+  3. Download new cert, upload to app vendor
+  4. Make new cert active in Entra ID
+  5. Test SSO works with new cert
+  6. Delete old cert
+  NEVER let it expire without replacement - SSO breaks for all users
+
+Monitoring:
+  - Check Entra ID sign-in logs for SSO failures weekly
+  - Set up alerts for SAML errors > threshold
+  - Monitor cert expiry dates (calendar reminder 60 days out)
+
+New app onboarding pattern:
+  1. Vendor asks "Do you support SAML or OIDC?"
+  2. Check Entra ID gallery for the app
+  3. If gallery: add and configure (pre-filled settings)
+  4. If not: create non-gallery app, get SAML metadata from vendor
+  5. Exchange metadata/certs
+  6. Configure claims (ask vendor: "what claims do you need?")
+  7. Assign pilot group
+  8. Test with pilot users
+  9. Roll out to full user group
+  10. Enable SCIM provisioning if supported</pre>
+
+<div class="interview-tip">Interview tip: "I've configured SSO for applications like Autodesk, Adobe, and Bluebeam. The process starts with adding the app from the Entra ID gallery, configuring SAML claims or OIDC consent, exchanging certificates or metadata with the vendor, verifying domains, and assigning user groups. I always test with a pilot group first and use SAML-tracer to debug any assertion issues. I also track certificate expiry dates to rotate them proactively before they break SSO."</div>
+`
     }
   ]
 },
