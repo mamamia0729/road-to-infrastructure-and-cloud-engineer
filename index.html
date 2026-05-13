@@ -3236,6 +3236,797 @@ COMMON POST-MIGRATION ISSUES:
 `
     }
   ]
+},
+{
+  id: 'enterprise-tools',
+  name: '09 Enterprise Tooling',
+  desc: 'The tools real enterprises use - ITSM, monitoring, backup, PAM, SIEM, endpoint, migration',
+  topics: [
+    {
+      id: 'tools-itsm',
+      title: 'ITSM & Ticketing - ServiceNow, Jira, BMC',
+      content: `
+<h4>What is ITSM</h4>
+<p>IT Service Management (ITSM) is the framework and toolset for managing IT services. Every action in enterprise IT flows through a ticket - incidents, changes, requests, problems. "No ticket, no work" is the rule. The ticketing system is the source of truth for what happened, when, and who did it.</p>
+
+<h4>The tools</h4>
+<pre>SERVICENOW (dominant in enterprise):
+  What: Cloud-based ITSM platform. Handles incidents, changes, problems,
+        asset management, CMDB, knowledge base, workflows.
+  Why it wins: Highly customizable, integrates with everything, ITIL-aligned.
+  Used by: Most Fortune 500 companies.
+  Key modules:
+    - Incident Management (break/fix tickets)
+    - Change Management (RFC, CAB approval workflows)
+    - Problem Management (root cause analysis)
+    - CMDB (Configuration Management Database - inventory of all IT assets)
+    - Knowledge Base (documented solutions)
+    - Service Catalog (self-service portal for users)
+  Your role: Create/update incidents and changes. Use CMDB for asset lookup.
+             Build knowledge articles for recurring issues.
+
+JIRA SERVICE MANAGEMENT (Atlassian):
+  What: ITSM built on Jira. Popular in tech companies and mid-market.
+  Strength: Dev and IT on same platform (Jira for dev, JSM for IT).
+  Used by: Tech companies, startups scaling up, mid-size orgs.
+  Key features: Queues, SLA tracking, automation rules, Confluence integration.
+
+BMC REMEDY / HELIX:
+  What: Legacy enterprise ITSM. Being replaced by ServiceNow in many orgs.
+  Still used by: Government, healthcare, old-school enterprises.
+  Know it exists but don't deep-dive unless a JD mentions it.
+
+FRESHSERVICE:
+  What: Cloud ITSM for small/mid orgs. Simple, affordable.
+  Used by: Companies with 100-1000 employees.</pre>
+
+<h4>ITIL processes mapped to tools</h4>
+<pre>Process              What it is                          Tool module
+Incident Mgmt        "Something is broken, fix it"        ServiceNow Incident
+Change Mgmt          "I want to change something"         ServiceNow Change
+Problem Mgmt         "Why does this keep breaking?"        ServiceNow Problem
+Request Fulfillment  "I need access/software/equipment"   ServiceNow Catalog
+Asset Mgmt           "What do we own and where is it?"    ServiceNow CMDB
+Knowledge Mgmt       "How do we fix this common issue?"   ServiceNow KB</pre>
+
+<h4>CMDB (Configuration Management Database)</h4>
+<pre>What: A database of every IT asset and how they relate to each other.
+  Server APP-SRV01:
+    - OS: Windows Server 2022
+    - IP: 10.0.3.15
+    - Application: ERP System
+    - Owner: Finance Department
+    - Depends on: SQL-SRV01 (database)
+    - Depends on: DC01 (authentication)
+
+Why it matters for migration:
+  - CMDB tells you which applications run on which servers
+  - Relationship mapping shows dependencies
+  - Impact analysis: "If I migrate SQL-SRV01, what else is affected?"
+  - Without CMDB, you're discovering dependencies the hard way (outages)</pre>
+
+<div class="interview-tip">Interview tip: "I work within ServiceNow for all changes and incidents. For migrations, I create a change request with the runbook attached, get CAB approval, and update the ticket at each step. Post-migration issues get linked back to the change ticket for traceability. I also use the CMDB for dependency mapping before migration planning."</div>
+`
+    },
+    {
+      id: 'tools-monitoring',
+      title: 'Monitoring - SCOM, SolarWinds, Zabbix, Datadog',
+      content: `
+<h4>What is IT monitoring</h4>
+<p>Monitoring tools watch your infrastructure 24/7 and alert you when something is wrong - before users notice. They track CPU, memory, disk, network, application health, and service availability. In enterprise, if it's not monitored, it doesn't exist.</p>
+
+<h4>The tools</h4>
+<pre>SCOM (System Center Operations Manager) - Microsoft:
+  What: Microsoft's enterprise monitoring for Windows infrastructure.
+  Monitors: Windows Servers, AD, SQL Server, Exchange, IIS, Hyper-V.
+  How: Agents installed on servers report to SCOM management server.
+  Strength: Deep integration with Microsoft stack. Management packs for every MS product.
+  Weakness: Complex to set up, Windows-only mindset, being replaced by Azure Monitor.
+  Key concepts:
+    - Management Pack: plugin that tells SCOM how to monitor a specific product
+    - Agent: software on the monitored server that collects data
+    - Alert: notification when a threshold is crossed
+    - Override: customize thresholds per server/group
+  Your role: Monitor alerts, tune thresholds, deploy agents to new servers.
+
+SOLARWINDS (Orion platform):
+  What: Network and server monitoring. Strong in network monitoring.
+  Products:
+    - NPM (Network Performance Monitor) - switches, routers, firewalls
+    - SAM (Server & Application Monitor) - server health, app monitoring
+    - IPAM (IP Address Manager) - track IP allocations
+  Strength: Great dashboards, network topology maps, easy to use.
+  Used by: Mid to large enterprises, especially network-heavy.
+  Note: SolarWinds had a major supply chain attack in 2020 (Sunburst).
+        Know this if asked about security - shows awareness.
+
+ZABBIX (open-source):
+  What: Open-source monitoring platform. Servers, network, cloud, apps.
+  Strength: Free, highly flexible, scales well.
+  Weakness: Steeper learning curve, less polished UI than commercial tools.
+  Used by: Cost-conscious orgs, Linux-heavy environments.
+
+DATADOG (cloud-native):
+  What: SaaS monitoring platform. Infrastructure, APM, logs, security.
+  Strength: Cloud-native, great for hybrid/multi-cloud, modern UI.
+  Weakness: Expensive at scale (per-host pricing).
+  Used by: Cloud-forward companies, DevOps teams.
+
+PRTG (Paessler):
+  What: Network and infrastructure monitoring. Known for simplicity.
+  Strength: Easy setup, good for small/mid orgs, free tier (100 sensors).
+  Used by: Small to mid enterprises.</pre>
+
+<h4>What to monitor (enterprise standard)</h4>
+<pre>INFRASTRUCTURE:
+  CPU utilization (alert > 90% sustained 5 min)
+  Memory utilization (alert > 90%)
+  Disk space (alert < 10% free)
+  Network interface errors/drops
+  Server uptime / reboot detection
+  Windows service status (is the critical service running?)
+
+ACTIVE DIRECTORY:
+  DC replication status (repadmin equivalent)
+  LDAP response time
+  Kerberos ticket failures
+  AD Connect sync status and errors
+  FSMO role holder availability
+
+APPLICATIONS:
+  HTTP/HTTPS endpoint availability (is the website up?)
+  Application-specific health checks
+  Database connectivity
+  Queue depth (if using message queues)
+  Error rate in application logs
+
+NETWORK:
+  Switch/router CPU and memory
+  Interface utilization and errors
+  VPN tunnel status
+  Firewall connection table utilization
+  DNS resolution time</pre>
+
+<h4>Monitoring during migration</h4>
+<pre>BEFORE: Baseline normal metrics (so you know what "healthy" looks like)
+DURING: Watch for authentication failures, service crashes, replication errors
+AFTER: Compare to baseline. Any degradation = investigate.
+HYPER-CARE: Create temporary dashboard for migrated systems with tighter thresholds.</pre>
+
+<div class="interview-tip">Interview tip: "I use monitoring to validate migrations. Before the change window, I capture baseline metrics. During migration, I watch for authentication failures and service health. After migration, I compare to baseline and create a temporary hyper-care dashboard with tighter alert thresholds for the migrated systems."</div>
+`
+    },
+    {
+      id: 'tools-backup',
+      title: 'Backup & DR - Veeam, Rubrik, Azure Backup, Commvault',
+      content: `
+<h4>What is enterprise backup</h4>
+<p>Backup tools create copies of your data and systems so you can recover from hardware failure, ransomware, accidental deletion, or failed migrations. In enterprise, backup is not optional - it's a compliance requirement. Every server, every database, every critical system has a backup schedule and a tested recovery plan.</p>
+
+<h4>Key concepts</h4>
+<pre>RPO (Recovery Point Objective):
+  "How much data can we afford to lose?"
+  RPO = 1 hour means backups run at least every hour.
+  If disaster strikes, you lose at most 1 hour of data.
+
+RTO (Recovery Time Objective):
+  "How fast do we need to be back up?"
+  RTO = 4 hours means you must restore service within 4 hours.
+
+3-2-1 Rule:
+  3 copies of data
+  2 different media types (disk + tape, or disk + cloud)
+  1 offsite copy (different location or cloud)
+
+Backup types:
+  Full   - everything, every time. Slowest, most storage, fastest restore.
+  Incremental - only what changed since LAST backup. Fast, small, slower restore.
+  Differential - only what changed since last FULL. Middle ground.</pre>
+
+<h4>The tools</h4>
+<pre>VEEAM (market leader for virtualization backup):
+  What: Backup and replication for VMs, physical servers, cloud workloads, M365.
+  Strength: VMware/Hyper-V integration is excellent. Fast restore. Easy to use.
+  Key features:
+    - Image-level backup (entire VM as a single file)
+    - Instant VM Recovery (boot backup directly as VM in minutes)
+    - SureBackup (automated backup verification - actually boots the backup and tests it)
+    - Veeam ONE (monitoring and reporting for backup environment)
+    - M365 backup (Exchange, SharePoint, Teams, OneDrive)
+  Used by: Most enterprises with VMware or Hyper-V.
+  Your role: Configure backup jobs, monitor success/failure, test restores.
+
+RUBRIK (modern, API-first):
+  What: Backup-as-a-service appliance. Drop it in, it manages itself.
+  Strength: Immutable backups (ransomware can't encrypt them), API-driven, SLA-based.
+  Key concept: You define an SLA ("Gold = backup every 4 hours, keep 30 days")
+               and assign VMs/databases to SLAs. Rubrik handles the rest.
+  Used by: Enterprises modernizing backup, security-conscious orgs.
+
+COMMVAULT:
+  What: Enterprise backup for everything (physical, virtual, cloud, SaaS, database).
+  Strength: Broad coverage - if it exists, Commvault can back it up.
+  Weakness: Complex to manage, steep learning curve.
+  Used by: Large enterprises with diverse environments.
+
+AZURE BACKUP:
+  What: Microsoft's cloud backup service.
+  Backs up: Azure VMs, on-prem VMs (via agent), SQL, file shares, M365 (limited).
+  Strength: Native Azure integration, no infrastructure to manage.
+  Key component: Recovery Services Vault (where backups are stored).
+  Used by: Azure-heavy environments, hybrid setups.
+
+WINDOWS SERVER BACKUP (built-in):
+  What: Free, basic backup built into Windows Server.
+  Use for: System state backup (AD, registry, boot files).
+  Critical for: Domain controller backup before migration.
+  Not suitable for: Enterprise-scale backup management.</pre>
+
+<h4>Backup in migration context</h4>
+<pre>BEFORE ANY MIGRATION:
+  1. Verify latest backup exists and is recent
+  2. Verify backup is restorable (don't trust "success" status - test it)
+  3. For SQL: Take a manual full backup with CHECKSUM
+  4. For AD: System state backup of domain controllers
+  5. For servers: Full image backup or Veeam snapshot
+  6. Document backup locations and restore procedures in runbook
+
+IF MIGRATION FAILS:
+  7. Restore SQL database from pre-migration backup
+  8. Restore server from image backup if domain re-join failed
+  9. System state restore if DC was affected (last resort)</pre>
+
+<div class="interview-tip">Interview tip: "Before any migration, I verify backups are current and restorable - not just that the backup job says 'success.' I take a manual SQL backup with CHECKSUM before database changes, and a system state backup before domain operations. The backup is my rollback safety net."</div>
+`
+    },
+    {
+      id: 'tools-pam',
+      title: 'PAM & Secrets - CyberArk, BeyondTrust, HashiCorp Vault',
+      content: `
+<h4>What is PAM</h4>
+<p>Privileged Access Management (PAM) controls and monitors who uses admin accounts. In enterprise, you don't just "know the admin password." Admin credentials are stored in a vault, checked out when needed, automatically rotated, and every use is logged. This prevents insider threats and limits damage from compromised accounts.</p>
+
+<h4>The problem PAM solves</h4>
+<pre>WITHOUT PAM:
+  - 15 engineers share the same Domain Admin password
+  - Password is in a spreadsheet or someone's head
+  - Password hasn't been changed in 2 years
+  - No audit trail of who used it when
+  - If one engineer is compromised, attacker has Domain Admin
+  - Service account passwords are hard-coded in scripts
+
+WITH PAM:
+  - Admin credentials stored in encrypted vault
+  - Engineer requests access, gets temporary credential
+  - Session is recorded (video replay of what they did)
+  - Password auto-rotates after use
+  - Full audit trail: who, when, what, from where
+  - Service accounts managed and rotated automatically</pre>
+
+<h4>The tools</h4>
+<pre>CYBERARK (market leader):
+  What: Full PAM suite - vault, session management, password rotation.
+  Components:
+    - Digital Vault: encrypted storage for credentials
+    - PSM (Privileged Session Manager): proxies and records admin sessions
+    - CPM (Central Policy Manager): auto-rotates passwords on schedule
+    - PTA (Privileged Threat Analytics): detects anomalous privileged activity
+    - AAM (Application Access Manager): manages credentials for applications
+  How it works for you:
+    1. You need to RDP to a server as admin
+    2. Open CyberArk portal, find the server
+    3. Click "Connect" - CyberArk retrieves the password from the vault
+    4. PSM opens an RDP session (you never see the actual password)
+    5. Your session is recorded
+    6. After you disconnect, the password may auto-rotate
+  Used by: Banks, healthcare, government, any regulated industry.
+
+BEYONDTRUST (strong in endpoint privilege):
+  What: PAM + endpoint privilege management.
+  Strength: Removing local admin rights from workstations while letting
+            users install approved software (privilege elevation on demand).
+  Products:
+    - Password Safe: credential vault (like CyberArk vault)
+    - Remote Support: secure remote access with session recording
+    - Privilege Management: remove local admin, elevate per-app
+  Used by: Enterprises focused on endpoint security.
+
+HASHICORP VAULT (for DevOps/cloud):
+  What: Secrets management for applications and infrastructure.
+  Strength: API-first, dynamic secrets, cloud-native.
+  Use case: Store API keys, database passwords, certificates.
+             Applications request secrets at runtime instead of hard-coding.
+  Used by: DevOps teams, cloud-native environments.
+  Less relevant for traditional AD migration but know it exists.
+
+THYCOTIC / DELINEA (mid-market PAM):
+  What: Secret Server (password vault) + Privilege Manager (endpoint).
+  Strength: Easier to deploy than CyberArk, good for mid-market.
+  Used by: Companies that need PAM but CyberArk is too complex/expensive.</pre>
+
+<h4>PAM in migration context</h4>
+<pre>BEFORE MIGRATION:
+  - Service account passwords managed in CyberArk need to be coordinated
+  - If CyberArk auto-rotates the password during migration window = disaster
+  - FREEZE password rotation for migration targets before the change window
+
+DURING MIGRATION:
+  - Check out admin credentials from vault for migration activities
+  - All migration actions should be through PSM (recorded session)
+  - Create temporary privileged access if needed (with expiry)
+
+AFTER MIGRATION:
+  - Update CyberArk to manage new target domain accounts
+  - Onboard new service accounts to the vault
+  - Remove old source domain accounts from vault management
+  - Resume password rotation</pre>
+
+<div class="interview-tip">Interview tip: "I work with CyberArk for privileged access. During migrations, I coordinate with the PAM team to freeze password rotation on affected service accounts before the change window. All migration activities go through PSM for audit trail. After migration, I onboard the new target domain service accounts to CyberArk and resume rotation."</div>
+`
+    },
+    {
+      id: 'tools-siem',
+      title: 'SIEM & Security - Splunk, Sentinel, QRadar, CrowdStrike',
+      content: `
+<h4>What is SIEM</h4>
+<p>Security Information and Event Management (SIEM) collects logs from every system, correlates them, and detects threats. Think of it as a security camera system for your entire IT environment - every login, every file access, every network connection is logged, and the SIEM watches for suspicious patterns.</p>
+
+<h4>The tools</h4>
+<pre>SPLUNK (most widely deployed):
+  What: Log aggregation, search, analysis, and alerting platform.
+  Not just SIEM: Splunk is a general-purpose log platform. Security is one use case.
+  Strength: Searches any data. "Google for your logs."
+  Query language: SPL (Search Processing Language)
+    Example: index=windows sourcetype=WinEventLog EventCode=4625
+             | stats count by Account_Name
+             (Find all failed login attempts grouped by account)
+  Components:
+    - Forwarders: collect logs from servers/devices
+    - Indexers: store and index the data
+    - Search Heads: where you query and build dashboards
+    - Splunk Enterprise Security (ES): SIEM add-on with correlation rules
+  Used by: Large enterprises, security-heavy orgs.
+  Cost: Expensive (licensed by daily data ingestion volume).
+
+MICROSOFT SENTINEL (cloud SIEM):
+  What: Cloud-native SIEM built on Azure Log Analytics.
+  Strength: Native integration with M365, Entra ID, Azure, Defender.
+  Query language: KQL (Kusto Query Language) - same as Azure Monitor.
+  Key features:
+    - Data connectors: plug in any log source (M365, firewalls, servers)
+    - Analytics rules: detect threats automatically
+    - Playbooks: automated response (Logic Apps)
+    - Workbooks: dashboards and reports
+    - UEBA: user and entity behavior analytics
+  Used by: Microsoft-heavy environments, cloud-forward orgs.
+  Cost: Per GB ingested (some M365 logs are free).
+
+IBM QRADAR:
+  What: Enterprise SIEM with strong correlation engine.
+  Strength: Offense detection, network flow analysis.
+  Used by: Government, financial services, traditional enterprise.
+  Know it exists, less common in new deployments.
+
+CROWDSTRIKE FALCON (EDR/XDR, not pure SIEM):
+  What: Endpoint Detection and Response. Agent on every workstation/server.
+  What it does: Detects malware, ransomware, lateral movement, suspicious behavior.
+  Strength: Lightweight agent, cloud-managed, excellent threat intelligence.
+  How it differs: SIEM = log aggregation + correlation. EDR = endpoint-level threat detection.
+  Often paired with SIEM: CrowdStrike detects on endpoint, sends alerts to Splunk/Sentinel.
+  Used by: Most enterprises as endpoint security layer.
+
+MICROSOFT DEFENDER FOR ENDPOINT (EDR):
+  What: Microsoft's EDR product. Competes with CrowdStrike.
+  Strength: Integrated with M365 Defender, Intune, Sentinel.
+  Used by: Microsoft-stack enterprises.</pre>
+
+<h4>SIEM in migration context</h4>
+<pre>BEFORE MIGRATION:
+  - Alert SIEM team: "Expect unusual login patterns during migration window"
+  - Create temporary suppression rules (so migration activity doesn't trigger incident)
+  - Baseline normal authentication patterns
+
+DURING MIGRATION:
+  - SIEM will see: new domain logins, failed auth attempts (expected during cutover)
+  - Without suppression: SOC gets flooded with false positives
+  - WITH suppression: only genuinely suspicious activity triggers alerts
+
+AFTER MIGRATION:
+  - Remove suppression rules
+  - Update SIEM log sources (new DCs, new domain name in logs)
+  - Update correlation rules for new domain name
+  - Verify logs flowing from migrated servers
+  - Watch for: accounts still authenticating to OLD domain (missed remediation)</pre>
+
+<div class="interview-tip">Interview tip: "During migrations, I coordinate with the SOC to create temporary alert suppressions for expected authentication changes. After migration, I verify log sources are updated in Splunk/Sentinel so security monitoring isn't blind to the migrated environment. I also watch for authentication attempts against the old domain - that tells me which applications we missed in remediation."</div>
+`
+    },
+    {
+      id: 'tools-endpoint',
+      title: 'Endpoint Management - SCCM/MECM, Intune, JAMF, PDQ',
+      content: `
+<h4>What is endpoint management</h4>
+<p>Endpoint management tools deploy software, patches, configurations, and policies to workstations and servers at scale. Instead of touching 300 machines one by one, you push changes from a central console.</p>
+
+<h4>The tools</h4>
+<pre>SCCM / MECM (Microsoft Endpoint Configuration Manager):
+  What: On-prem client management. The enterprise standard for 20+ years.
+  Renamed: SCCM -> MECM -> now just "Configuration Manager" (still called SCCM by everyone).
+  What it does:
+    - OS deployment (PXE boot, task sequences, imaging)
+    - Software deployment (MSI, EXE, script-based installs)
+    - Patch management (Windows updates, third-party patches)
+    - Compliance settings (check/enforce configurations)
+    - Inventory (hardware and software inventory of all devices)
+    - Reporting (SQL-based reports on everything)
+  Architecture:
+    - Site server (central management)
+    - Distribution points (content distribution)
+    - Management points (client communication)
+    - SCCM agent on every managed device
+  Used by: Enterprises with large on-prem Windows fleets.
+  Migration relevance: Can push Quest agents, run migration scripts at scale.
+
+CO-MANAGEMENT (SCCM + Intune):
+  What: Run SCCM and Intune side by side. Gradually shift workloads to Intune.
+  How: Device is managed by BOTH. You choose which tool handles which workload:
+    - Compliance policies: Intune
+    - Software deployment: SCCM (initially), migrate to Intune
+    - Windows Update: Intune
+    - Device configuration: Intune
+  Why: Migration path from SCCM-only to Intune-only.
+
+INTUNE (covered in Domain 04):
+  Cloud-native endpoint management. Replacing SCCM over time.
+
+JAMF (Apple device management):
+  What: MDM for macOS and iOS devices.
+  If the org has Macs, they use JAMF.
+  You probably won't touch it, but know it exists.
+
+PDQ DEPLOY / INVENTORY (mid-market):
+  What: Simple software deployment and inventory for Windows.
+  Strength: Easy to use, agentless, affordable.
+  Used by: Small/mid orgs that don't need SCCM complexity.
+
+WSUS (Windows Server Update Services):
+  What: Free Microsoft tool for Windows Update management.
+  What it does: Approve/deny Windows updates, deploy to groups.
+  Limitation: Only handles Windows updates, not third-party.
+  Being replaced by: Intune Windows Update for Business, Azure Update Manager.</pre>
+
+<h4>Endpoint tools in migration context</h4>
+<pre>USE SCCM/MECM FOR:
+  - Deploying Quest migration agent to all workstations
+  - Running pre-migration scripts (inventory, validation)
+  - Pushing configuration changes post-migration
+  - Deploying new certificates
+  - Running gpupdate /force across all machines
+
+TASK SEQUENCE FOR DOMAIN MIGRATION:
+  1. Deploy Quest agent
+  2. Run pre-check script (verify connectivity to target DC)
+  3. Trigger Quest computer migration
+  4. Reboot
+  5. Run post-check script (verify domain membership)
+  6. Report status back to SCCM</pre>
+
+<div class="interview-tip">Interview tip: "I'd use SCCM to deploy the Quest migration agent and run pre-migration validation scripts across all 300 workstations. SCCM task sequences let me automate the entire computer migration flow - deploy agent, validate, migrate, reboot, post-check - and report success/failure back to the console so I know exactly which machines need attention."</div>
+`
+    },
+    {
+      id: 'tools-remote-access',
+      title: 'Remote Access & Support - VPN, Bastion, RDP, RMM',
+      content: `
+<h4>What is enterprise remote access</h4>
+<p>How administrators securely connect to servers and how remote employees connect to the network. Enterprise doesn't use TeamViewer or AnyDesk for production - they use purpose-built, audited, and secured tools.</p>
+
+<h4>The tools</h4>
+<pre>AZURE BASTION:
+  What: Managed jump box service. Provides RDP/SSH to Azure VMs without public IPs.
+  How: You connect through Azure Portal. Bastion proxies to the VM over private network.
+  Strength: No public IP exposure. No VPN client needed. HTML5 browser-based.
+  Used for: All Azure VM admin access. Eliminates "RDP exposed to internet" risk.
+
+VPN (Virtual Private Network):
+  Types in enterprise:
+    - Site-to-Site: office network to Azure/datacenter (always-on, hardware VPN appliance)
+    - Point-to-Site: individual user laptop to Azure/datacenter (VPN client)
+    - SSL VPN: browser-based VPN (Cisco AnyConnect, Palo Alto GlobalProtect)
+  Vendors: Cisco AnyConnect, Palo Alto GlobalProtect, Fortinet FortiClient, Zscaler ZPA
+
+JUMP BOX / BASTION HOST (on-prem):
+  What: A hardened server in a DMZ that admins RDP/SSH into first, then hop to target servers.
+  Why: No direct RDP from workstation to production server. The jump box is the single entry point.
+  Security: MFA to access jump box. Session recording. Limited tools installed.
+  Being replaced by: Azure Bastion (cloud), CyberArk PSM (PAM-based).
+
+RDP (Remote Desktop Protocol):
+  What: Windows built-in remote access. Port 3389.
+  Enterprise rules:
+    - NEVER expose RDP to the internet
+    - Always through VPN, jump box, or Bastion
+    - NLA (Network Level Authentication) enabled
+    - Restrict via NSG/firewall to admin subnets only
+
+RMM (Remote Monitoring & Management):
+  What: Tools for managing endpoints remotely (MSP and IT support).
+  Products: ConnectWise Automate, Datto RMM, NinjaRMM
+  Used by: MSPs and IT support teams for remote desktop control.
+  Enterprise alternative: SCCM Remote Control, CyberArk PSM.
+
+WINDOWS ADMIN CENTER:
+  What: Microsoft's web-based server management tool.
+  Replaces: Many traditional MMC snap-ins (Server Manager, Event Viewer, etc.)
+  Access: Browser-based, connect to servers on your network.
+  Features: Performance monitoring, registry editing, role management, file browsing.
+  Good for: Quick server management tasks without full RDP.</pre>
+
+<h4>Secure remote access architecture (enterprise pattern)</h4>
+<pre>REMOTE ADMIN accessing production server:
+
+  Laptop --[VPN]--> Corporate Network --[Jump Box/CyberArk PSM]--> Production Server
+    MFA at VPN       Firewall rules       Session recorded         NSG limits access
+    Split tunnel     Segment admin         Credentials from vault   No internet access
+    or full tunnel   traffic from user     Time-limited access      Hardened OS
+
+  For Azure VMs:
+  Laptop --[Browser]--> Azure Portal --[Bastion]--> Azure VM
+    MFA via Entra       RBAC controls     Private IP only     No public IP needed
+    CA policy           Audit logged       HTML5 RDP           NSG blocks all else</pre>
+
+<div class="interview-tip">Interview tip: "For server administration, I always go through a secured path - Azure Bastion for cloud VMs, VPN plus jump box for on-prem servers, or CyberArk PSM when available. I never expose RDP directly to the internet and always ensure NLA is enabled. During migrations, I pre-validate that Bastion or VPN connectivity works to the target environment before the change window."</div>
+`
+    },
+    {
+      id: 'tools-virtualization',
+      title: 'Virtualization - VMware, Hyper-V, Proxmox',
+      content: `
+<h4>What is enterprise virtualization</h4>
+<p>Virtualization lets you run multiple virtual servers (VMs) on a single physical server. Instead of buying 50 physical servers, you buy 5 powerful ones and run 10 VMs each. Enterprise IT runs almost everything on VMs - domain controllers, application servers, SQL servers, file servers.</p>
+
+<h4>The tools</h4>
+<pre>VMWARE vSPHERE (dominant in enterprise):
+  Components:
+    - ESXi: The hypervisor installed on physical servers (bare-metal)
+    - vCenter Server: Central management for all ESXi hosts
+    - vSphere Client: Web UI for managing everything
+    - vMotion: Live-migrate a running VM to another host (zero downtime)
+    - vSAN: Software-defined storage across ESXi hosts
+    - DRS: Distributed Resource Scheduler (auto-balances VMs across hosts)
+    - HA: High Availability (auto-restart VMs if host fails)
+
+  Key concepts:
+    - Cluster: group of ESXi hosts managed together
+    - Datastore: shared storage where VM files live
+    - Snapshot: point-in-time capture of VM state (NOT a backup)
+    - Template: golden image VM used to deploy new VMs quickly
+    - Resource Pool: allocate CPU/memory limits to groups of VMs
+
+  Migration relevance:
+    - Take VM snapshot before migration (rollback in seconds)
+    - Clone VM for testing migration in isolated environment
+    - vMotion to move VM to maintenance host during migration
+
+MICROSOFT HYPER-V:
+  What: Microsoft's hypervisor. Built into Windows Server.
+  Management: Hyper-V Manager (single host) or SCVMM (System Center Virtual Machine Manager) for multi-host.
+  Features: Live Migration (like vMotion), checkpoints (like snapshots), Replica (DR).
+  Used by: Microsoft-stack shops, orgs that don't want VMware licensing costs.
+  Trend: Declining. Broadcom's VMware acquisition is pushing some orgs to Hyper-V or Nutanix.
+
+NUTANIX:
+  What: Hyper-converged infrastructure (HCI). Compute + storage + virtualization in one box.
+  Hypervisor: AHV (their own, free) or runs VMware ESXi.
+  Strength: Simplified infrastructure. Scale by adding nodes.
+  Used by: Enterprises modernizing datacenter.
+
+PROXMOX:
+  What: Open-source virtualization platform. KVM + LXC.
+  Used by: Homelabs, small businesses, cost-conscious orgs.
+  Not common in enterprise but good for personal labs.</pre>
+
+<h4>Virtualization in migration context</h4>
+<pre>BEFORE MIGRATION:
+  1. Take VM snapshot of every server being migrated
+     WHY: If migration fails, revert snapshot = instant rollback
+     WARNING: Snapshots are NOT backups. Delete within 72 hours.
+     Large snapshots degrade performance.
+
+  2. Clone critical VMs for testing
+     Create isolated test network
+     Test migration steps on clone first
+     Validate without risking production
+
+DURING MIGRATION:
+  3. If server needs reboot (domain re-join), schedule on VMware
+  4. Monitor VM resource usage (migration adds CPU/memory load)
+
+AFTER MIGRATION:
+  5. Delete snapshots (within 24-72 hours)
+  6. Update VM notes/annotations with new domain info
+  7. Update VMware tags/folders if organized by domain</pre>
+
+<div class="interview-tip">Interview tip: "Before any server migration, I take a VMware snapshot as a fast rollback option. If the migration fails at any step, I can revert the snapshot and the server is back to its pre-migration state in under a minute. I also clone critical servers to test the migration steps in an isolated environment before touching production."</div>
+`
+    },
+    {
+      id: 'tools-documentation',
+      title: 'Documentation - Confluence, SharePoint Wiki, Visio, Draw.io',
+      content: `
+<h4>Why documentation matters in enterprise</h4>
+<p>If it's not documented, it didn't happen and nobody can maintain it. Enterprise IT runs on documentation - runbooks, architecture diagrams, SOPs, and knowledge articles. When you leave or go on vacation, your documentation is what keeps things running.</p>
+
+<h4>The tools</h4>
+<pre>CONFLUENCE (Atlassian):
+  What: Team wiki and documentation platform.
+  Used for: Runbooks, SOPs, architecture docs, meeting notes, project pages.
+  Strength: Integrates with Jira, good search, templates, page hierarchy.
+  Used by: Most tech companies and enterprises using Atlassian stack.
+  Structure: Space > Page > Child Pages
+  Example:
+    Space: "IT Infrastructure"
+      Page: "Active Directory"
+        Child: "AD Migration 2026 - Runbook"
+        Child: "AD Connect Configuration"
+        Child: "Break-Glass Account Procedure"
+
+SHAREPOINT WIKI / PAGES:
+  What: Documentation built into SharePoint (M365).
+  Used for: Orgs that don't want to pay for Confluence.
+  Strength: Already included in M365 E3, integrates with Teams.
+  Weakness: Less flexible than Confluence, formatting is limited.
+
+MICROSOFT VISIO:
+  What: Diagramming tool for architecture diagrams, network topology, flowcharts.
+  Used for: Network diagrams, AD topology, migration flow diagrams, process flows.
+  Alternative: Draw.io (free, web-based, integrates with Confluence).
+
+DRAW.IO / DIAGRAMS.NET (free):
+  What: Free diagramming tool. Web-based or desktop app.
+  Strength: Free, good enough for most diagrams, exports to PNG/SVG/PDF.
+  Integrates with: Confluence, VS Code, Google Drive.
+  Used by: Everyone who doesn't want to pay for Visio.
+
+IT GLUE / HUDU (MSP documentation):
+  What: Documentation platforms designed for IT teams.
+  Strength: Structured documentation (passwords, procedures, assets linked together).
+  Used by: MSPs and IT teams that need structured ops docs.</pre>
+
+<h4>What to document (enterprise standard)</h4>
+<pre>FOR EVERY SYSTEM:
+  Architecture Diagram  - visual overview, components, connections
+  Admin Runbook         - how to perform routine tasks
+  Break/Fix Guide       - common issues and how to resolve them
+  DR Plan               - how to recover if this system goes down
+  Change History        - what was changed, when, and why
+
+FOR MIGRATIONS:
+  Migration Plan        - scope, timeline, waves, dependencies
+  Dependency Matrix     - apps, service accounts, SPNs, SQL databases
+  Runbooks (per app)    - step-by-step migration procedure
+  Test Plans            - pre/post validation checklists
+  Communication Plan    - who is notified, when, about what
+  Lessons Learned       - what went wrong, what to do differently next wave</pre>
+
+<h4>Architecture diagram standards</h4>
+<pre>NETWORK DIAGRAM:
+  Show: VNets/subnets, firewalls, VPN connections, server placement
+  Tool: Visio or Draw.io with Azure/AWS icon packs
+
+AD TOPOLOGY DIAGRAM:
+  Show: Forests, domains, trusts, DC placement, site links, AD Connect
+  Include: Server names, IP addresses, roles (FSMO holders)
+
+MIGRATION FLOW DIAGRAM:
+  Show: Source domain -> coexistence -> target domain
+  Include: Migration waves, timeline, rollback decision points
+  Color code: Green (complete), Yellow (in progress), Red (not started)</pre>
+
+<div class="interview-tip">Interview tip: "I maintain documentation in Confluence with a standard structure for every system: architecture diagram, admin runbook, break/fix guide, and DR plan. For migrations, I create a dedicated Confluence space with the migration plan, dependency matrix, per-application runbooks, and a lessons-learned page that gets updated after every wave."</div>
+`
+    },
+    {
+      id: 'tools-patching',
+      title: 'Patching - WSUS, SCCM, Azure Update Manager, Rapid7',
+      content: `
+<h4>What is enterprise patch management</h4>
+<p>Patch management is the process of testing, approving, and deploying software updates (security patches, bug fixes, feature updates) across your environment. Microsoft releases patches on the second Tuesday of every month ("Patch Tuesday"). Unpatched systems are the #1 attack vector for ransomware.</p>
+
+<h4>The tools</h4>
+<pre>WSUS (Windows Server Update Services):
+  What: Free Microsoft tool for managing Windows updates.
+  How: WSUS server downloads updates from Microsoft, admins approve,
+       clients pull approved updates from WSUS.
+  Limitation: Windows updates only. No third-party patching.
+  Used by: Small orgs or as a component of larger solutions.
+
+SCCM/MECM Software Update Point:
+  What: SCCM's patching module. Uses WSUS under the hood.
+  Strength: Patch + deploy + compliance reporting in one tool.
+  Features:
+    - Software Update Groups (bundle patches)
+    - Maintenance Windows (deploy only during approved times)
+    - Automatic Deployment Rules (auto-approve and deploy monthly)
+    - Compliance reporting (which servers are missing patches)
+  Used by: Enterprises with SCCM already deployed.
+
+AZURE UPDATE MANAGER:
+  What: Cloud-native patching for Azure VMs and Arc-connected on-prem servers.
+  Strength: No infrastructure to manage. Works for Azure and on-prem.
+  Features:
+    - Assess: show which updates are missing
+    - Patch: deploy updates on schedule
+    - Maintenance configurations: define patch windows
+  Used by: Azure and hybrid environments.
+
+INTUNE WINDOWS UPDATE FOR BUSINESS:
+  What: Cloud-managed Windows Update via Intune.
+  Features:
+    - Update rings (pilot -> broad deployment)
+    - Feature update deferrals (delay major updates by X days)
+    - Quality update deferrals (delay security patches by X days)
+    - Expedite critical updates (push immediately)
+  Used by: Intune-managed devices (modern management).
+
+RAPID7 InsightVM / NEXPOSE:
+  What: Vulnerability scanner + patch priority.
+  What it does: Scans servers for missing patches AND known vulnerabilities.
+  Strength: Risk-based prioritization. "This unpatched CVE has active exploits in the wild."
+  Used by: Security-focused orgs, compliance requirements.
+
+QUALYS:
+  What: Cloud vulnerability management platform.
+  Similar to Rapid7 but SaaS-based.
+  Used by: Large enterprises, especially for compliance scanning.
+
+IVANTI (formerly Shavlik):
+  What: Patch management for Windows, macOS, Linux, and third-party apps.
+  Strength: Third-party patching (Chrome, Java, Adobe, etc.)
+  Used by: Orgs needing cross-platform and third-party patching.</pre>
+
+<h4>Patch management process</h4>
+<pre>MONTHLY CYCLE (Patch Tuesday + 2 weeks):
+  Week 1 (Patch Tuesday):
+    - Microsoft releases patches
+    - Review security bulletins and CVE severity
+    - Download to WSUS/SCCM
+    - Deploy to TEST environment
+
+  Week 2:
+    - Validate patches in test (no application breakage)
+    - Approve for pilot group (IT department, 10% of servers)
+    - Monitor for issues
+
+  Week 3:
+    - Approve for production (broad deployment)
+    - Deploy during maintenance windows (weekends/evenings)
+    - Monitor compliance
+
+  Week 4:
+    - Remediate stragglers (servers that failed to patch)
+    - Compliance reporting to management
+    - Exception handling (servers that CAN'T be patched yet)</pre>
+
+<h4>Patching in migration context</h4>
+<pre>BEFORE MIGRATION:
+  - Ensure all servers are fully patched (don't migrate a vulnerable server)
+  - Check if pending reboot from patches (could conflict with migration reboot)
+  - Pause automatic patch deployment during migration window
+
+DURING MIGRATION:
+  - No patching. Change freeze during migration window.
+
+AFTER MIGRATION:
+  - Verify patch compliance on migrated servers
+  - Update WSUS/SCCM groups to reflect new domain membership
+  - Resume automatic patch deployment
+  - Run vulnerability scan to confirm no regressions</pre>
+
+<div class="interview-tip">Interview tip: "I manage patching on a monthly cycle aligned to Patch Tuesday. Patches go to test first, then a pilot group, then broad deployment with a two-week lag for stability. During migrations, I freeze patching to avoid conflicts and resume immediately after with a compliance scan to verify nothing regressed."</div>
+`
+    }
+  ]
 }
 ];
 
