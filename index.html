@@ -1834,6 +1834,1408 @@ Cost optimization:
 `
     }
   ]
+},
+{
+  id: 'ad-migration',
+  name: '08 AD Domain Migration & App Migration',
+  desc: 'On-prem to on-prem AD migration, Quest tools, SQL migration, service accounts, runbooks',
+  topics: [
+    {
+      id: 'adm-what-is-domain-migration',
+      title: 'What Is an AD Domain Migration (Big Picture)',
+      content: `
+<h4>What it is</h4>
+<p>An Active Directory domain migration is the process of moving every identity - users, computers, groups, service accounts - from one AD domain (the <strong>source</strong>) to another AD domain (the <strong>target</strong>). Think of it like moving an entire company from one office building to another, where every keycard, every door lock, every security camera, and every employee badge has to be re-issued to work in the new building, while the company keeps operating during the move.</p>
+
+<h4>Why companies do this</h4>
+<ul>
+<li><strong>Acquisition / Merger</strong> - Company A buys Company B. Both have AD domains. Consolidate into one.</li>
+<li><strong>Domain consolidation</strong> - Company grew over 20 years, ended up with 5 domains. Simplify to 1.</li>
+<li><strong>Rebranding</strong> - Company changes name. contoso.local becomes newname.local.</li>
+<li><strong>Security remediation</strong> - Current domain was compromised. Build a clean domain and migrate into it.</li>
+<li><strong>Technical debt</strong> - Domain was built on Server 2003 functional level. Easier to migrate than upgrade.</li>
+</ul>
+
+<h4>The two types of on-prem AD migration</h4>
+<pre>INTRA-FOREST (same forest, restructure domains):
+  Example: contoso.local\\corp and contoso.local\\branch -> contoso.local\\unified
+  - Objects move within the same forest
+  - Simpler because forest-level trusts already exist
+  - SID History works natively
+
+INTER-FOREST (different forests entirely):
+  Example: contoso.local -> newcompany.local
+  - Objects move between separate forests
+  - Requires explicit trust relationship
+  - More complex, more planning
+  - This is what most large migrations are</pre>
+
+<h4>What actually moves</h4>
+<pre>IDENTITY OBJECTS:
+  - User accounts (with passwords if using Quest/ADMT)
+  - Computer accounts (workstations and servers)
+  - Security groups (and their memberships)
+  - Service accounts (accounts that applications use to run)
+  - Group Managed Service Accounts (gMSAs)
+
+CONFIGURATION:
+  - Group Policy Objects (GPOs) - must be recreated/imported
+  - Organizational Units (OUs) - must be recreated
+  - DNS zones - may need migration or rebuild
+  - Certificate templates - if using AD Certificate Services
+  - Scheduled tasks running as domain accounts
+
+DOES NOT MOVE AUTOMATICALLY:
+  - Applications (they need remediation)
+  - SQL Server logins and permissions
+  - File share permissions (they reference old SIDs)
+  - Printer permissions
+  - Hard-coded domain references in scripts and configs</pre>
+
+<h4>Key terms you must know</h4>
+<pre>SID (Security Identifier):
+  Every object in AD has a unique SID. Example: S-1-5-21-3623811015-3361044348-30300820-1013
+  When you access a file share, Windows checks your SID against the ACL (access list).
+  When you migrate a user, they get a NEW SID in the target domain.
+  Problem: all the old permissions reference the OLD SID.
+
+SID History:
+  A special attribute that stores the user's OLD SID(s) on their new account.
+  When the migrated user accesses old resources, Windows checks both the new SID AND SID History.
+  This is how users keep access to resources during migration - the bridge between old and new.
+
+Trust Relationship:
+  A link between two domains/forests that says "I trust identities from your domain."
+  Two-way trust: both domains trust each other (users from either can access resources in both).
+  One-way trust: only one direction (target trusts source, or vice versa).
+  For migration: you need at least a one-way trust (target trusts source).
+
+ADMT (Active Directory Migration Tool):
+  Microsoft's free tool for migrating AD objects.
+  Works but limited - no GUI scheduling, basic reporting, aging codebase.
+  Most enterprises use Quest Migration Manager instead.
+
+Quest Migration Manager for AD:
+  Enterprise-grade migration tool by Quest (Dell).
+  Handles user/group/computer migration, password sync, SID History, directory sync.
+  Provides coexistence (mail forwarding, calendar sharing during migration).
+  Has a real management console with scheduling, rollback, and reporting.</pre>
+
+<div class="interview-tip">Interview tip: "A domain migration is fundamentally an identity migration. Every security principal - users, groups, computers, service accounts - gets recreated in the target domain with SID History to preserve access to existing resources. The challenge isn't moving the accounts - it's remediating every application and service that has hard-coded dependencies on the source domain."</div>
+`
+    },
+    {
+      id: 'adm-quest-tools',
+      title: 'Quest Migration Manager - How It Works',
+      content: `
+<h4>What it is</h4>
+<p>Quest Migration Manager for Active Directory is the industry-standard enterprise tool for AD domain migrations. It automates what would otherwise be weeks of manual PowerShell and ADMT work. Think of it as the migration assembly line - it has stations for every phase of the migration.</p>
+
+<h4>Quest product suite for migration</h4>
+<pre>QUEST MIGRATION MANAGER FOR AD (the core):
+  - Migrates users, groups, computers between domains/forests
+  - Maintains SID History
+  - Syncs passwords between source and target during coexistence
+  - Directory synchronization (keeps source and target in sync during migration)
+  - Handles computer migration (re-domain join without re-imaging)
+
+QUEST COEXISTENCE MANAGER FOR NOTES/EXCHANGE (if email migration):
+  - Mail forwarding between source and target
+  - Free/busy calendar sharing during coexistence
+  - GAL (Global Address List) synchronization
+
+QUEST ON DEMAND MIGRATION (cloud):
+  - For tenant-to-tenant M365 migrations
+  - Not relevant to on-prem-to-on-prem, but know it exists
+
+QUEST RECOVERY MANAGER FOR AD (safety net):
+  - Granular AD object recovery without full DC restore
+  - Critical during migration in case something goes wrong</pre>
+
+<h4>Migration Manager for AD - Components</h4>
+<pre>CONSOLE:
+  Where you manage everything. Install on admin workstation.
+  Think of it as "mission control" for the migration.
+
+AGENTS:
+  Small software installed on source and target DCs.
+  They do the actual work - reading objects, writing objects, syncing.
+
+RESOURCE PROCESSING:
+  Scans servers and workstations for permissions, services, scheduled tasks
+  that reference source domain accounts. This is the "find everything that
+  will break" engine.
+
+PASSWORD SYNC:
+  Keeps passwords synchronized between source and target domains.
+  When user changes password in source, it auto-updates in target (and vice versa).
+  Critical during coexistence - users don't need to remember two passwords.
+
+DIRECTORY SYNC:
+  Keeps objects in sync between source and target.
+  If you create a user in source, it appears in target.
+  If you modify a group in source, the change replicates.
+  This is how you maintain coexistence without chaos.</pre>
+
+<h4>How a Quest migration flows (step by step)</h4>
+<pre>PHASE 1: SETUP
+  1. Install Migration Manager console on admin workstation
+  2. Install agents on source and target domain controllers
+  3. Configure trust relationship between domains
+  4. Configure directory synchronization (source -> target)
+  5. Configure password synchronization
+  6. Test with a small batch of test accounts
+
+PHASE 2: DIRECTORY SYNC (coexistence begins)
+  7. Start directory sync - creates matching accounts in target
+  8. Users now exist in BOTH domains (source = primary, target = shadow)
+  9. Passwords sync automatically
+  10. This phase can run for weeks/months while you prepare apps
+
+PHASE 3: RESOURCE PROCESSING
+  11. Run resource scanning on all servers
+  12. Generates report: "these 47 services use domain\\serviceacct01"
+  13. Generates report: "these 200 shares have ACLs referencing source domain"
+  14. This is your migration dependency map
+
+PHASE 4: MIGRATION WAVES
+  15. Migrate Wave 1 (IT department - your guinea pigs)
+  16. Quest re-ACLs permissions, updates services, migrates computer
+  17. Validate everything works
+  18. Fix issues found
+  19. Migrate Wave 2, 3, 4... (department by department)
+  20. Each wave: migrate users -> migrate computers -> validate -> next
+
+PHASE 5: CLEANUP
+  21. Disable accounts in source domain
+  22. Monitor for anything still hitting source
+  23. Decommission source DCs
+  24. Remove trust relationship
+  25. Remove Quest agents</pre>
+
+<div class="interview-tip">Interview tip: "I'd use Quest Migration Manager for the directory sync and password sync capabilities during coexistence. The key advantage over ADMT is that Quest maintains a live sync between domains, so during the weeks or months of migration, both environments stay consistent. Users can authenticate to either domain while we migrate wave by wave."</div>
+`
+    },
+    {
+      id: 'adm-dependency-mapping',
+      title: 'Application Dependency Mapping',
+      content: `
+<h4>What it is</h4>
+<p>Before you migrate anything, you need to know what will break. Dependency mapping is the process of finding every place where an application touches the source domain - service accounts, group memberships, SPNs, DNS names, certificates, hard-coded paths. If you miss one, the application breaks after migration.</p>
+
+<h4>Why this is the most critical step</h4>
+<p>Migrating the user accounts is the easy part. The hard part is that applications are wired into AD in dozens of hidden ways. A service running as SOURCEDOMAIN\\svc_app won't start after migration because that account no longer exists in the source domain (or was migrated to TARGETDOMAIN\\svc_app and the service config wasn't updated).</p>
+
+<h4>What to inventory for every application</h4>
+<pre>IDENTITY BINDINGS (how the app authenticates):
+  Service Accounts:
+    - What domain account does the Windows service run as?
+    - Command: Get-WmiObject Win32_Service | Select Name, StartName
+    - Look for: SOURCEDOMAIN\\svc_*, any domain account that's not LocalSystem
+
+  Scheduled Tasks:
+    - What account do scheduled tasks run as?
+    - Command: Get-ScheduledTask | Select TaskName, Principal
+    - Look for: SOURCEDOMAIN\\* in the "Run As" field
+
+  Application Pools (IIS):
+    - What identity does each IIS app pool use?
+    - Command: Get-IISAppPool | Select Name, ProcessModel.IdentityType
+    - Look for: domain accounts instead of ApplicationPoolIdentity
+
+  COM+ Applications:
+    - What identity do COM+ apps run under?
+    - Check via Component Services > COM+ Applications > Properties > Identity
+
+  SQL Server Service Account:
+    - SQL Server engine, agent, and SSRS all run as service accounts
+    - Check: SQL Server Configuration Manager > Services
+
+GROUP MEMBERSHIPS (what access the app needs):
+  - What AD groups does the service account belong to?
+  - What AD groups control user access to the app?
+  - Are there nested groups? (Group A contains Group B which contains users)
+  - Command: Get-ADPrincipalGroupMembership -Identity svc_appname
+
+NETWORK IDENTITY (how the app is found):
+  SPNs (Service Principal Names):
+    - What: A unique identifier that ties a service to an account for Kerberos auth
+    - Example: MSSQLSvc/sqlserver01.source.local:1433
+    - If the SPN references the old domain, Kerberos auth breaks
+    - Command: setspn -L SOURCEDOMAIN\\svc_sqlserver
+    - Command: Get-ADUser svc_sqlserver -Properties servicePrincipalName
+
+  DNS Records:
+    - Does the app use DNS names tied to the source domain?
+    - Example: app.source.local -> needs to become app.target.local
+    - Or: keep old DNS as CNAME pointing to new
+
+  Certificates:
+    - Does the app use SSL/TLS certs with the old domain name in the SAN?
+    - Example: CN=app.source.local - needs new cert for target domain
+
+HARD-CODED REFERENCES (the hidden landmines):
+  - Connection strings: "Data Source=sqlserver.source.local"
+  - Config files: LDAP://source.local/OU=Users
+  - Registry entries with domain paths
+  - Scripts with domain names or UNC paths (\\\\source.local\\share)
+  - Application databases storing domain\\username format</pre>
+
+<h4>Discovery process (step by step)</h4>
+<pre>Step 1: Get application inventory from CMDB or app owners
+  "Give me every application running in this environment"
+
+Step 2: For each application, document:
+  [ ] Application name and owner
+  [ ] Server(s) it runs on
+  [ ] Service account(s) used
+  [ ] Scheduled tasks
+  [ ] SPNs registered
+  [ ] AD groups for access control
+  [ ] SQL databases it connects to
+  [ ] DNS names it uses
+  [ ] Certificates installed
+  [ ] Config files with domain references
+
+Step 3: Run Quest Resource Processing or manual scripts:
+  # Find all services running as domain accounts on a server
+  Invoke-Command -ComputerName SERVER01 -ScriptBlock {
+    Get-WmiObject Win32_Service |
+    Where-Object { $_.StartName -like "SOURCEDOMAIN*" } |
+    Select Name, DisplayName, StartName, State
+  }
+
+  # Find all scheduled tasks running as domain accounts
+  Invoke-Command -ComputerName SERVER01 -ScriptBlock {
+    Get-ScheduledTask |
+    Where-Object { $_.Principal.UserId -like "SOURCEDOMAIN*" } |
+    Select TaskName, @{N='RunAs';E={$_.Principal.UserId}}
+  }
+
+  # Find all SPNs in the domain
+  Get-ADUser -Filter {servicePrincipalName -like "*"} -Properties servicePrincipalName |
+  Select Name, @{N='SPNs';E={$_.servicePrincipalName -join "; "}}
+
+Step 4: Classify each app by migration approach:
+  CLONE  - rebuild in target domain (cleanest, most work)
+  REMEDIATE - update identity bindings in place (most common)
+  IN-PLACE - update service accounts, keep app on same server</pre>
+
+<h4>Output: The dependency matrix</h4>
+<pre>| App        | Server    | Svc Account          | SPNs | Groups           | SQL DB    | Approach   |
+|------------|-----------|----------------------|------|------------------|-----------|------------|
+| ERP System | APP-SRV01 | SRC\\svc_erp          | 2    | GRP-ERP-Users    | ERP_Prod  | Remediate  |
+| HR Portal  | WEB-SRV01 | SRC\\svc_hrweb        | 1    | GRP-HR-Access    | HR_DB     | Remediate  |
+| FileServer | FS-SRV01  | LocalSystem          | 0    | GRP-FS-Admins    | N/A       | Re-ACL     |
+| Legacy App | APP-SRV02 | SRC\\svc_legacy       | 0    | GRP-Legacy-Users | Legacy_DB | Clone      |</pre>
+
+<div class="interview-tip">Interview tip: "Dependency mapping is where migrations succeed or fail. I build a matrix for every application: what service accounts it uses, what SPNs are registered, what AD groups control access, and what SQL databases it connects to. Then I classify each app as clone, remediate, or in-place. This matrix becomes the migration runbook for the app team."</div>
+`
+    },
+    {
+      id: 'adm-service-accounts-spns',
+      title: 'Service Accounts, SPNs & Identity Bindings (Deep Dive)',
+      content: `
+<h4>What is a service account</h4>
+<p>A service account is an AD user account that an application or Windows service uses to run and authenticate - instead of a human logging in. When you see a Windows service running as DOMAIN\\svc_sqlserver instead of "Local System", that's a service account. It has a username and password stored in AD just like a person, but no human ever logs into it interactively.</p>
+
+<h4>Types of service accounts</h4>
+<pre>STANDARD DOMAIN USER (legacy, most common in old environments):
+  What: Regular AD user account used as service identity
+  Example: SOURCEDOMAIN\\svc_appname
+  Password: Set manually, often never changed (security risk)
+  Problem in migration: Must be recreated in target domain, every service
+    using it must be updated to TARGETDOMAIN\\svc_appname
+
+MANAGED SERVICE ACCOUNT (MSA):
+  What: AD account whose password is automatically managed by AD
+  Limitation: Can only be used on ONE server
+  Example: SOURCEDOMAIN\\svc_app$ (note the $ suffix)
+  Problem in migration: Must be recreated in target, server re-associated
+
+GROUP MANAGED SERVICE ACCOUNT (gMSA):
+  What: Like MSA but can be used across MULTIPLE servers
+  Password: Auto-rotated by AD every 30 days, retrieved by authorized servers
+  Example: SOURCEDOMAIN\\gmsa_app$
+  Best practice: Use these for all new deployments
+  Problem in migration: Must be recreated in target domain,
+    all servers must be authorized in target to retrieve the password</pre>
+
+<h4>What is an SPN (Service Principal Name)</h4>
+<p>An SPN is a unique name that identifies a service instance to Kerberos authentication. When a client wants to connect to a SQL server using Windows authentication (Kerberos), it asks AD: "Give me a Kerberos ticket for the service named MSSQLSvc/sqlserver01.source.local:1433." AD looks up which account has that SPN registered and issues the ticket. If the SPN is wrong, missing, or duplicated - Kerberos fails and the connection falls back to NTLM (slower, less secure) or fails entirely.</p>
+
+<h4>SPN format</h4>
+<pre>ServiceClass/Host:Port
+  ServiceClass = type of service (MSSQLSvc, HTTP, HOST, etc.)
+  Host = server name (FQDN or NetBIOS)
+  Port = optional port number
+
+Common SPNs:
+  MSSQLSvc/sqlserver01.source.local:1433    - SQL Server
+  MSSQLSvc/sqlserver01.source.local         - SQL Server (default instance)
+  HTTP/webapp01.source.local                - IIS web application
+  HTTP/portal.source.local                  - Web portal (may use host header)
+  HOST/server01.source.local                - General computer identity</pre>
+
+<h4>Why SPNs break during migration</h4>
+<pre>BEFORE MIGRATION:
+  Account: SOURCEDOMAIN\\svc_sql
+  SPN: MSSQLSvc/sqlserver01.source.local:1433
+  Kerberos flow: Client -> AD -> "svc_sql has that SPN" -> ticket issued -> works
+
+AFTER MIGRATION (if not remediated):
+  Account migrated to: TARGETDOMAIN\\svc_sql (new SID, new domain)
+  Old SPN still registered on SOURCEDOMAIN\\svc_sql
+  New account has NO SPN registered
+  Kerberos flow: Client -> AD -> "nobody has that SPN" -> FAIL
+
+FIX:
+  1. Remove SPN from old account: setspn -D MSSQLSvc/sqlserver01.source.local:1433 SOURCEDOMAIN\\svc_sql
+  2. Register SPN on new account: setspn -S MSSQLSvc/sqlserver01.target.local:1433 TARGETDOMAIN\\svc_sql
+  3. If server keeps old DNS name: setspn -S MSSQLSvc/sqlserver01.source.local:1433 TARGETDOMAIN\\svc_sql</pre>
+
+<h4>Migration remediation for service accounts (step by step)</h4>
+<pre>FOR EACH SERVICE ACCOUNT:
+
+Step 1: Document current state
+  Get-ADUser svc_appname -Properties servicePrincipalName, MemberOf |
+  Select Name, SamAccountName, servicePrincipalName, MemberOf
+
+Step 2: Create matching account in target domain
+  - Same name (svc_appname)
+  - Same password (or new one - will update all services)
+  - Same group memberships (recreated in target domain)
+
+Step 3: Register SPNs on new account
+  setspn -S MSSQLSvc/server01.target.local:1433 TARGETDOMAIN\\svc_appname
+
+Step 4: Update every service that uses this account
+  # Update Windows service
+  sc.exe \\\\SERVER01 config "ServiceName" obj= "TARGETDOMAIN\\svc_appname" password= "P@ssw0rd"
+
+  # Update scheduled task
+  schtasks /Change /S SERVER01 /TN "TaskName" /RU "TARGETDOMAIN\\svc_appname" /RP "P@ssw0rd"
+
+  # Update IIS App Pool
+  Set-WebConfigurationProperty -PSPath 'IIS:\\' \\
+    -Filter "system.applicationHost/applicationPools/add[@name='AppPoolName']/processModel" \\
+    -Name "userName" -Value "TARGETDOMAIN\\svc_appname"
+
+Step 5: Test authentication
+  - Restart the service
+  - Verify it starts successfully
+  - Verify Kerberos tickets are issued (klist on client)
+  - Verify application functionality end-to-end
+
+Step 6: Document the change
+  - What was changed
+  - Old value -> New value
+  - Test result
+  - Rollback steps (revert to old account if needed)</pre>
+
+<h4>Common SPN problems and how to fix them</h4>
+<pre>DUPLICATE SPN (most common):
+  Symptom: Kerberos fails intermittently
+  Cause: Same SPN registered on two different accounts
+  Find: setspn -X (searches entire forest for duplicates)
+  Fix: Remove the incorrect one with setspn -D
+
+MISSING SPN:
+  Symptom: App falls back to NTLM or connection fails
+  Cause: SPN was never registered, or lost during migration
+  Find: setspn -L accountname (list SPNs for account)
+  Fix: setspn -S ServiceClass/hostname DOMAIN\\account
+
+WRONG ACCOUNT:
+  Symptom: "Cannot generate SSPI context" error in SQL
+  Cause: SPN registered on wrong account (e.g., computer account vs service account)
+  Find: setspn -Q MSSQLSvc/servername (shows which account has it)
+  Fix: Remove from wrong account, add to correct one</pre>
+
+<div class="interview-tip">Interview tip: "Service accounts and SPNs are where I spend the most time in migration remediation. I start by exporting every SPN in the source domain and mapping them to service accounts. Then for each application, I document the full identity chain: what account runs the service, what SPNs it needs, what groups it belongs to. During cutover, I have a checklist: create account, register SPNs, update service config, restart, validate Kerberos with klist."</div>
+`
+    },
+    {
+      id: 'adm-sql-migration',
+      title: 'SQL Server Migration for Domain Migration',
+      content: `
+<h4>What it is</h4>
+<p>When you migrate AD domains, SQL Server is one of the most complex applications to remediate because it has its own layer of identity management. SQL Server has logins (who can connect), users (who can access databases), and roles (what they can do). Many of these are tied to the source domain. If you don't update them, nobody can access the database after migration.</p>
+
+<h4>SQL Server identity layers (understand this hierarchy)</h4>
+<pre>LAYER 1: WINDOWS SERVICE ACCOUNT
+  SQL Server itself runs as a Windows service.
+  The service runs under a domain account: SOURCEDOMAIN\\svc_sql
+  This account needs:
+    - Local admin on the SQL server (or specific SQL permissions)
+    - SPNs registered for Kerberos
+    - Permissions to the data/log file directories
+  MIGRATION IMPACT: Must update to TARGETDOMAIN\\svc_sql
+
+LAYER 2: SQL SERVER LOGINS (instance-level)
+  Logins are how users/apps CONNECT to SQL Server.
+  Two types:
+    - Windows login: SOURCEDOMAIN\\jsmith (uses AD credentials)
+    - SQL login: sa, appuser (uses SQL username/password, NOT affected by domain migration)
+  MIGRATION IMPACT: Every Windows login referencing SOURCEDOMAIN must be
+    recreated as TARGETDOMAIN\\username or TARGETDOMAIN\\groupname
+
+LAYER 3: DATABASE USERS (database-level)
+  Each database has users mapped to logins.
+  Login SOURCEDOMAIN\\jsmith -> mapped to database user "jsmith" in AppDB
+  MIGRATION IMPACT: After recreating the login as TARGETDOMAIN\\jsmith,
+    the database user must be re-mapped to the new login.
+
+LAYER 4: DATABASE ROLES & PERMISSIONS
+  Users are assigned to database roles: db_datareader, db_datawriter, db_owner, or custom roles.
+  MIGRATION IMPACT: Permissions should survive if user mapping is done correctly.
+  But verify - don't assume.</pre>
+
+<h4>SQL Server migration steps (step by step)</h4>
+<pre>BEFORE MIGRATION (Assessment):
+
+Step 1: Inventory all SQL instances
+  # Find SQL instances on network (requires SQL discovery or CMDB)
+  Get-Service -ComputerName SERVER01 | Where { $_.Name -like "MSSQL*" }
+
+Step 2: Document SQL service accounts
+  # Check SQL Server Configuration Manager or:
+  Get-WmiObject Win32_Service -ComputerName SQLSERVER01 |
+  Where { $_.Name -like "MSSQL*" -or $_.Name -like "SQLAgent*" -or $_.Name -like "ReportServer*" } |
+  Select Name, StartName, State
+
+Step 3: Export all Windows logins from each instance
+  -- Run in SQL Server Management Studio (SSMS) or sqlcmd:
+  SELECT sp.name AS LoginName,
+         sp.type_desc AS LoginType,
+         sp.default_database_name,
+         sp.is_disabled
+  FROM sys.server_principals sp
+  WHERE sp.type IN ('U', 'G')  -- U = Windows user, G = Windows group
+  AND sp.name LIKE 'SOURCEDOMAIN%'
+  ORDER BY sp.name
+
+Step 4: For each database, document user-to-login mappings
+  USE [AppDatabase]
+  SELECT dp.name AS DatabaseUser,
+         dp.type_desc,
+         sp.name AS LoginName
+  FROM sys.database_principals dp
+  LEFT JOIN sys.server_principals sp ON dp.sid = sp.sid
+  WHERE dp.type IN ('U', 'G', 'S')
+  AND dp.name != 'dbo'
+
+Step 5: Document SPNs for SQL Server
+  setspn -L SOURCEDOMAIN\\svc_sql</pre>
+
+<pre>DURING MIGRATION (Execution):
+
+Step 6: Create new SQL service account in target domain
+  TARGETDOMAIN\\svc_sql with same permissions
+
+Step 7: Register SPNs on new account
+  setspn -S MSSQLSvc/sqlserver01.target.local:1433 TARGETDOMAIN\\svc_sql
+  setspn -S MSSQLSvc/sqlserver01.target.local TARGETDOMAIN\\svc_sql
+  setspn -S MSSQLSvc/sqlserver01:1433 TARGETDOMAIN\\svc_sql
+
+Step 8: Update SQL Server service to run as new account
+  - Use SQL Server Configuration Manager (NOT services.msc - it handles permissions)
+  - Change account for: SQL Server, SQL Agent, SSRS, SSIS
+
+Step 9: Create new Windows logins for target domain
+  -- For each user:
+  CREATE LOGIN [TARGETDOMAIN\\jsmith] FROM WINDOWS
+  -- For each group:
+  CREATE LOGIN [TARGETDOMAIN\\GRP-App-Users] FROM WINDOWS
+
+Step 10: Re-map database users to new logins
+  USE [AppDatabase]
+  ALTER USER [jsmith] WITH LOGIN = [TARGETDOMAIN\\jsmith]
+
+  -- If the user name doesn't match, you may need:
+  -- DROP USER [SOURCEDOMAIN\\jsmith]
+  -- CREATE USER [jsmith] FOR LOGIN [TARGETDOMAIN\\jsmith]
+  -- Then re-grant all permissions
+
+Step 11: Transfer permissions (if user was recreated)
+  -- Check current permissions first:
+  USE [AppDatabase]
+  SELECT dp.name, dp.type_desc, p.permission_name, p.state_desc
+  FROM sys.database_permissions p
+  JOIN sys.database_principals dp ON p.grantee_principal_id = dp.principal_id
+  WHERE dp.name = 'jsmith'
+
+  -- Re-grant as needed:
+  GRANT SELECT, INSERT, UPDATE ON SCHEMA::dbo TO [jsmith]
+  -- Or add to role:
+  ALTER ROLE db_datareader ADD MEMBER [jsmith]</pre>
+
+<pre>AFTER MIGRATION (Validation):
+
+Step 12: Test connectivity from application
+  - Can the app connect to SQL with the new domain credentials?
+  - Check: SQL Server error log for login failures
+  - Check: Application logs for connection errors
+
+Step 13: Verify Kerberos (not falling back to NTLM)
+  -- Run on client machine connecting to SQL:
+  klist    (shows Kerberos tickets, should see MSSQLSvc/server:port)
+
+  -- On SQL Server, check connection auth:
+  SELECT session_id, auth_scheme FROM sys.dm_exec_connections
+  -- Should show "KERBEROS" not "NTLM"
+
+Step 14: Disable old logins (don't delete yet)
+  ALTER LOGIN [SOURCEDOMAIN\\jsmith] DISABLE
+
+Step 15: Monitor for 2 weeks, then remove old logins
+  DROP LOGIN [SOURCEDOMAIN\\jsmith]</pre>
+
+<h4>Linked servers (don't forget these)</h4>
+<pre>If SQL Server has linked servers to other SQL instances:
+  - The linked server may use SOURCEDOMAIN credentials for the connection
+  - Check: SSMS > Server Objects > Linked Servers > Security
+  - Update the remote login mapping to TARGETDOMAIN credentials
+
+  EXEC sp_helplinkedsrvlogin    -- shows all linked server login mappings</pre>
+
+<h4>Common SQL migration failures</h4>
+<pre>"Login failed for SOURCEDOMAIN\\svc_app" - Service still using old account
+"Cannot generate SSPI context"           - SPN missing or wrong on new account
+"User or group not found"                - Login not yet created in target domain
+"Orphaned users"                         - Database user exists but has no matching login
+  Fix: ALTER USER [username] WITH LOGIN = [TARGETDOMAIN\\username]</pre>
+
+<div class="interview-tip">Interview tip: "For SQL Server in a domain migration, I work through four layers: service account, server logins, database users, and database permissions. I script the discovery upfront - export all Windows logins and their database mappings. During cutover, I create the new logins, remap database users, and verify Kerberos with sys.dm_exec_connections. The most common post-migration issue is orphaned database users, which I fix with ALTER USER...WITH LOGIN."</div>
+`
+    },
+    {
+      id: 'adm-migration-runbook',
+      title: 'Migration Runbook - How to Build and Execute One',
+      content: `
+<h4>What is a runbook</h4>
+<p>A runbook is a step-by-step document that tells an engineer exactly what to do during a migration. Every step has: the action, the command or procedure, the expected result, the validation check, and the rollback step. No guessing, no improvisation. If step 7 fails, the runbook tells you what to do. Think of it as a pilot's pre-flight checklist - you follow it exactly, every time.</p>
+
+<h4>Why runbooks matter in enterprise</h4>
+<ul>
+<li>Change Advisory Board (CAB) requires a documented plan before approving the change</li>
+<li>Multiple engineers may execute different parts - runbook ensures consistency</li>
+<li>3 AM cutover window with tired engineers - runbook prevents mistakes</li>
+<li>Audit trail - "we followed the approved procedure"</li>
+<li>Rollback plan - if something fails at step 12, you know exactly how to undo steps 1-11</li>
+</ul>
+
+<h4>Runbook structure (template)</h4>
+<pre>=========================================
+MIGRATION RUNBOOK: [Application Name]
+=========================================
+Migration ID:     MIG-2026-042
+Application:      ERP System (SAP)
+Server(s):        APP-SRV01, SQL-SRV01
+Migration Date:   2026-06-15 02:00 - 06:00 (maintenance window)
+Migration Lead:   Thinh Le
+Approver:         Jay (CAB approved 2026-06-10)
+Change Ticket:    CHG-2026-1234
+
+PARTICIPANTS:
+  - Migration Engineer: Thinh Le (identity, services)
+  - DBA: [Name] (SQL migration steps)
+  - App Owner: [Name] (UAT validation)
+  - Network: [Name] (on-call for DNS/firewall)
+
+PRE-REQUISITES (completed before migration window):
+  [x] Target domain accounts created (TARGETDOMAIN\\svc_erp)
+  [x] SPNs registered on new accounts
+  [x] New AD groups created with correct membership
+  [x] DNS records prepared (not yet active)
+  [x] Rollback plan reviewed and approved
+  [x] Backups verified: SQL full backup, system state backup
+  [x] Communication sent to users about downtime
+
+GO/NO-GO CHECKLIST (confirm at start of window):
+  [ ] All team members present and confirmed
+  [ ] Backups completed within last 4 hours
+  [ ] No active incidents affecting target systems
+  [ ] Change ticket status: In Progress
+=========================================</pre>
+
+<h4>Runbook step format</h4>
+<pre>STEP [#] - [Action Name]
+  Time estimate: [X minutes]
+  Executed by:   [Role/Name]
+
+  ACTION:
+    [Exact command or procedure]
+
+  EXPECTED RESULT:
+    [What you should see if it worked]
+
+  VALIDATION:
+    [Command or check to verify]
+
+  ROLLBACK (if this step fails):
+    [Exact command to undo this step]
+
+  STATUS: [ ] Not started  [ ] Complete  [ ] Failed - see notes
+  ACTUAL TIME: ___:___
+  NOTES: ___________________________________</pre>
+
+<h4>Example runbook steps (ERP application migration)</h4>
+<pre>STEP 1 - Stop Application Services
+  Time estimate: 5 minutes
+  Executed by: Migration Engineer
+
+  ACTION:
+    Invoke-Command -ComputerName APP-SRV01 -ScriptBlock {
+      Stop-Service -Name "ERPAppService" -Force
+      Stop-Service -Name "ERPScheduler" -Force
+    }
+
+  EXPECTED RESULT:
+    Both services show Status = Stopped
+
+  VALIDATION:
+    Invoke-Command -ComputerName APP-SRV01 -ScriptBlock {
+      Get-Service ERPAppService, ERPScheduler | Select Name, Status
+    }
+    # Expected: Both = Stopped
+
+  ROLLBACK:
+    Start-Service -Name "ERPAppService", "ERPScheduler"
+
+  STATUS: [ ]  ACTUAL TIME: ___:___
+
+---
+
+STEP 2 - Backup SQL Database (point-in-time recovery)
+  Time estimate: 15 minutes
+  Executed by: DBA
+
+  ACTION:
+    BACKUP DATABASE [ERP_Prod]
+    TO DISK = 'E:\\Backups\\ERP_Prod_PreMigration_20260615.bak'
+    WITH COMPRESSION, CHECKSUM, STATS = 10
+
+  EXPECTED RESULT:
+    "BACKUP DATABASE successfully processed"
+
+  VALIDATION:
+    RESTORE VERIFYONLY
+    FROM DISK = 'E:\\Backups\\ERP_Prod_PreMigration_20260615.bak'
+    WITH CHECKSUM
+
+  ROLLBACK:
+    RESTORE DATABASE [ERP_Prod]
+    FROM DISK = 'E:\\Backups\\ERP_Prod_PreMigration_20260615.bak'
+    WITH REPLACE, RECOVERY
+
+  STATUS: [ ]  ACTUAL TIME: ___:___
+
+---
+
+STEP 3 - Update SQL Server Service Account
+  Time estimate: 10 minutes
+  Executed by: Migration Engineer
+
+  ACTION:
+    On SQL-SRV01, open SQL Server Configuration Manager
+    SQL Server (MSSQLSERVER) > Properties > Log On
+    Change from: SOURCEDOMAIN\\svc_sql
+    Change to:   TARGETDOMAIN\\svc_sql
+    Enter new password
+    Click OK (service will restart)
+
+  EXPECTED RESULT:
+    SQL Server service restarts and shows "Running"
+
+  VALIDATION:
+    Get-Service MSSQLSERVER -ComputerName SQL-SRV01
+    # Expected: Status = Running
+    # Check SQL error log for clean startup
+
+  ROLLBACK:
+    Change service account back to SOURCEDOMAIN\\svc_sql via SQL Config Manager
+
+  STATUS: [ ]  ACTUAL TIME: ___:___
+
+---
+
+STEP 4 - Create New SQL Logins
+  Time estimate: 10 minutes
+  Executed by: DBA
+
+  ACTION:
+    CREATE LOGIN [TARGETDOMAIN\\svc_erp] FROM WINDOWS
+    CREATE LOGIN [TARGETDOMAIN\\GRP-ERP-Users] FROM WINDOWS
+    CREATE LOGIN [TARGETDOMAIN\\GRP-ERP-Admins] FROM WINDOWS
+
+  EXPECTED RESULT:
+    No errors. Logins visible in SSMS > Security > Logins
+
+  VALIDATION:
+    SELECT name, type_desc FROM sys.server_principals
+    WHERE name LIKE 'TARGETDOMAIN%'
+
+  ROLLBACK:
+    DROP LOGIN [TARGETDOMAIN\\svc_erp]
+    DROP LOGIN [TARGETDOMAIN\\GRP-ERP-Users]
+    DROP LOGIN [TARGETDOMAIN\\GRP-ERP-Admins]
+
+---
+
+... (steps continue through all changes, ending with):
+
+STEP 12 - Application Validation (UAT)
+  Time estimate: 30 minutes
+  Executed by: App Owner
+
+  ACTION:
+    App owner logs in with TARGETDOMAIN credentials and executes test plan:
+    [ ] Login to application
+    [ ] Open existing record
+    [ ] Create new record
+    [ ] Run standard report
+    [ ] Verify scheduled jobs running
+
+  EXPECTED RESULT:
+    All test cases pass
+
+  VALIDATION:
+    App owner sign-off in change ticket
+
+  ROLLBACK:
+    If critical failure: execute full rollback (Steps 11 -> 1 in reverse)
+
+---
+
+POST-MIGRATION:
+  [ ] Enable monitoring for application
+  [ ] Disable old SQL logins (don't delete for 30 days)
+  [ ] Update CMDB with new domain information
+  [ ] Update documentation
+  [ ] Close change ticket with outcomes
+  [ ] Send completion notification to stakeholders</pre>
+
+<div class="interview-tip">Interview tip: "Every migration I execute follows a structured runbook with pre-requisites, go/no-go checks, numbered steps with exact commands, expected results, and rollback procedures for each step. I build the runbook during planning, walk through it with the team before the change window, and execute it step by step during the migration. If any step fails, we know exactly when to call the rollback."</div>
+`
+    },
+    {
+      id: 'adm-change-management',
+      title: 'Change Management & ITIL Process',
+      content: `
+<h4>What it is</h4>
+<p>Change management is the formal process that controls how changes are made to production systems. In an enterprise, you cannot just migrate an application because you feel like it. Every change goes through a defined process with approvals, risk assessment, and communication. This protects the business from unplanned outages.</p>
+
+<h4>ITIL change management process</h4>
+<pre>ITIL = Information Technology Infrastructure Library
+  A set of best practices for IT service management.
+  You don't need to memorize the entire framework.
+  You need to understand the change management process.
+
+THE FLOW:
+  1. RFC (Request for Change)
+     "I want to migrate the ERP application to the target domain"
+     Includes: what, why, when, risk, rollback plan
+
+  2. CHANGE ASSESSMENT
+     Impact: What could break? Who is affected?
+     Risk: High/Medium/Low based on complexity and blast radius
+     Category:
+       - Standard: pre-approved, low risk (e.g., add a user to a group)
+       - Normal: requires CAB approval (e.g., migrate an application)
+       - Emergency: expedited approval for critical fixes
+
+  3. CAB REVIEW (Change Advisory Board)
+     A meeting (usually weekly) where IT leadership reviews Normal changes.
+     They ask: Is the plan solid? Is the rollback plan tested? Is the maintenance
+     window appropriate? Are the right people involved?
+     Outcome: Approved, Rejected, or Deferred
+
+  4. SCHEDULED & COMMUNICATED
+     Once approved, the change is scheduled in the maintenance calendar.
+     Affected users are notified of downtime.
+     All participants confirm availability.
+
+  5. IMPLEMENTATION
+     Execute the runbook during the approved window.
+     Update the change ticket with progress.
+
+  6. POST-IMPLEMENTATION REVIEW (PIR)
+     Was it successful? Any issues? Lessons learned?
+     Close the change ticket.</pre>
+
+<h4>Change ticket fields (what you fill out)</h4>
+<pre>Field                  Example
+Change ID              CHG-2026-1234
+Title                  Migrate ERP to target domain
+Description            Migrate ERP app identity from SOURCEDOMAIN to TARGETDOMAIN
+Requestor              Thinh Le
+Change Type            Normal
+Risk Level             High (business-critical application)
+Impact                 150 users cannot access ERP during 4-hour window
+Category               Application Migration
+Environment            Production
+Planned Start          2026-06-15 02:00 CST
+Planned End            2026-06-15 06:00 CST
+Rollback Deadline      2026-06-15 05:00 CST (1 hour before window ends)
+Rollback Plan          Restore SQL backup, revert service accounts, restart services
+Implementation Plan    See attached runbook (MIG-2026-042)
+Test Plan              See attached UAT checklist
+Communication Plan     Email to ERP users 5 days and 1 day before
+Approvers              Jay (IT Director), App Owner</pre>
+
+<h4>Release management for multi-wave migrations</h4>
+<pre>A domain migration isn't one change - it's a program of 50+ changes.
+
+RELEASE STRUCTURE:
+  Release: "Domain Migration - Q3 2026"
+    Wave 1: IT Department (10 users, 3 apps)     - Week 1
+    Wave 2: Finance (30 users, 5 apps)           - Week 3
+    Wave 3: Operations (80 users, 8 apps)        - Week 5
+    Wave 4: Engineering (60 users, 12 apps)       - Week 7
+    Wave 5: Remaining (120 users, 15 apps)        - Week 9
+    Wave 6: Cleanup and decommission              - Week 11
+
+Each wave has its own set of change tickets.
+Each app within a wave has its own runbook.
+Each wave has a go/no-go gate before proceeding to the next.</pre>
+
+<h4>Incident management (when things break)</h4>
+<pre>If a migration causes an issue after cutover:
+
+Priority levels:
+  P1 - Critical: Business stopped. ERP down for all users.
+       Response: 15 minutes. All hands on deck. Execute rollback.
+  P2 - High: Major feature broken. Reports not working.
+       Response: 30 minutes. Investigate, fix or workaround.
+  P3 - Medium: Minor feature broken. One user can't print.
+       Response: 4 hours. Fix during business hours.
+  P4 - Low: Cosmetic or non-urgent. Old domain name in footer.
+       Response: Next business day.
+
+POST-MIGRATION INCIDENT PROCESS:
+  1. User reports issue -> Help desk creates incident ticket
+  2. Triage: Is this migration-related? Check recent changes.
+  3. If yes: escalate to migration team with change ticket reference
+  4. Fix forward if possible, or rollback if within rollback window
+  5. Document in both incident ticket and change ticket
+  6. Add to "lessons learned" for next wave</pre>
+
+<div class="interview-tip">Interview tip: "I'm experienced with formal change management. Every migration has an RFC with risk assessment, CAB approval, a documented runbook, and a rollback deadline. During multi-wave migrations, I treat each wave as a separate release with its own go/no-go gate. If Wave 1 reveals issues, we pause, remediate the process, and adjust the runbook before Wave 2."</div>
+`
+    },
+    {
+      id: 'adm-pre-post-validation',
+      title: 'Pre-Migration & Post-Migration Validation',
+      content: `
+<h4>What it is</h4>
+<p>Validation is the proof that the migration worked. Pre-migration validation captures the "before" state. Post-migration validation proves the "after" state matches expectations. Without validation, you're guessing. With validation, you have evidence.</p>
+
+<h4>Pre-migration validation checklist</h4>
+<pre>RUN THESE BEFORE THE MIGRATION WINDOW OPENS:
+
+IDENTITY CHECKS:
+  [ ] Target domain accounts exist and are enabled
+      Get-ADUser -Identity svc_appname -Server targetdc.target.local
+  [ ] Target groups exist with correct membership
+      Get-ADGroupMember -Identity "GRP-App-Users" -Server targetdc.target.local
+  [ ] SPNs registered on target accounts
+      setspn -L TARGETDOMAIN\\svc_appname
+  [ ] No duplicate SPNs exist
+      setspn -X    (forest-wide duplicate check)
+
+NETWORK CHECKS:
+  [ ] Server can reach target domain controllers
+      Test-Connection targetdc.target.local
+      Test-NetConnection targetdc.target.local -Port 389   (LDAP)
+      Test-NetConnection targetdc.target.local -Port 88    (Kerberos)
+  [ ] DNS resolution works for target domain
+      Resolve-DnsName target.local
+      Resolve-DnsName targetdc.target.local
+
+BACKUP CHECKS:
+  [ ] Full SQL backup completed and verified
+      RESTORE VERIFYONLY FROM DISK = 'path\\backup.bak' WITH CHECKSUM
+  [ ] System state backup completed
+  [ ] Application config files backed up
+      Copy-Item "C:\\App\\config" "C:\\Backups\\PreMigration\\" -Recurse
+  [ ] Current service account configurations documented
+      Get-WmiObject Win32_Service -ComputerName SERVER01 |
+      Where { $_.StartName -like "SOURCEDOMAIN*" } |
+      Export-Csv "PreMig_Services.csv" -NoTypeInformation
+
+APPLICATION STATE CAPTURE:
+  [ ] Application is currently functional (baseline test)
+  [ ] Capture current performance metrics (response time, error rate)
+  [ ] Document current connection count
+      -- SQL: SELECT COUNT(*) FROM sys.dm_exec_connections
+  [ ] Screenshot key dashboards / application state</pre>
+
+<h4>Post-migration validation checklist</h4>
+<pre>RUN THESE IMMEDIATELY AFTER MIGRATION STEPS COMPLETE:
+
+IDENTITY VALIDATION:
+  [ ] Services running under new domain account
+      Get-WmiObject Win32_Service -ComputerName SERVER01 |
+      Where { $_.Name -eq "AppService" } | Select Name, StartName, State
+      # Expected: TARGETDOMAIN\\svc_app, Running
+
+  [ ] Scheduled tasks running under new account
+      Get-ScheduledTask -ComputerName SERVER01 |
+      Where { $_.Principal.UserId -like "TARGETDOMAIN*" } |
+      Select TaskName, @{N='RunAs';E={$_.Principal.UserId}}, State
+
+  [ ] Kerberos working (not falling back to NTLM)
+      # On SQL Server:
+      SELECT session_id, auth_scheme, client_net_address
+      FROM sys.dm_exec_connections WHERE auth_scheme = 'KERBEROS'
+      # Should see KERBEROS connections
+
+  [ ] SID History populated (if applicable)
+      Get-ADUser svc_appname -Properties SIDHistory -Server targetdc.target.local |
+      Select Name, SIDHistory
+
+SQL VALIDATION:
+  [ ] SQL Server service running
+      Get-Service MSSQLSERVER -ComputerName SQL-SRV01
+  [ ] SQL Agent running
+      Get-Service SQLSERVERAGENT -ComputerName SQL-SRV01
+  [ ] New logins exist and can connect
+      -- Test from app server:
+      sqlcmd -S SQL-SRV01 -E -Q "SELECT SUSER_NAME(), auth_scheme FROM sys.dm_exec_connections WHERE session_id = @@SPID"
+  [ ] No orphaned users
+      USE [AppDatabase]
+      EXEC sp_change_users_login 'Report'
+      # Should return 0 rows
+  [ ] Database accessible and data intact
+      SELECT COUNT(*) FROM [critical_table]
+      # Compare with pre-migration count
+
+APPLICATION VALIDATION:
+  [ ] Application starts without errors
+  [ ] Users can log in with target domain credentials
+  [ ] Core functionality test:
+      [ ] Read operation (view existing data)
+      [ ] Write operation (create new record)
+      [ ] Report generation
+      [ ] Search functionality
+  [ ] No errors in application logs
+      Get-EventLog -ComputerName APP-SRV01 -LogName Application -After (Get-Date).AddHours(-1) -EntryType Error
+  [ ] Performance acceptable (compare to pre-migration baseline)
+
+NETWORK VALIDATION:
+  [ ] DNS resolves correctly
+  [ ] No firewall blocks on new paths
+  [ ] Certificates valid (if using SSL/TLS with new domain names)</pre>
+
+<h4>UAT (User Acceptance Testing)</h4>
+<pre>WHO: The application owner or a designated business user
+WHEN: After engineering validation passes
+WHY: Engineers verify technical function. Users verify business function.
+
+UAT TEST PLAN (template):
+  Application: [Name]
+  Tested by: [Name]
+  Date: [Date]
+  Domain: TARGETDOMAIN
+
+  Test Case 1: Login
+    Action: Open application, log in with TARGETDOMAIN\\username
+    Expected: Successful login, home screen displays
+    Result: [ ] Pass  [ ] Fail
+    Notes: ________________________________
+
+  Test Case 2: View existing data
+    Action: Open record #12345
+    Expected: Record displays with correct data
+    Result: [ ] Pass  [ ] Fail
+    Notes: ________________________________
+
+  Test Case 3: Create new data
+    Action: Create new record with test data
+    Expected: Record saves successfully
+    Result: [ ] Pass  [ ] Fail
+    Notes: ________________________________
+
+  Test Case 4: Generate report
+    Action: Run [Monthly Summary] report
+    Expected: Report generates with correct data
+    Result: [ ] Pass  [ ] Fail
+    Notes: ________________________________
+
+  SIGN-OFF:
+  [ ] All test cases passed
+  [ ] Application owner approves migration
+  Signature: _________________ Date: _________</pre>
+
+<h4>Hyper-care period</h4>
+<pre>WHAT: A period of elevated monitoring and support after migration (typically 1-2 weeks).
+WHY: Issues may not surface immediately - some run on weekly schedules, month-end processes.
+
+HYPER-CARE ACTIVITIES:
+  Day 1-3:  Migration team actively monitors, responds within 15 min
+  Day 4-7:  Normal support resumes, migration team on-call
+  Day 8-14: Monitor for edge cases (month-end reports, scheduled jobs)
+  Day 15:   Hyper-care ends, transition to BAU (business as usual)
+
+WHAT TO WATCH:
+  - Failed scheduled tasks (they run on schedules you may not know about)
+  - Authentication failures in event logs
+  - Application errors spiking
+  - User-reported issues ("it worked before the migration")
+  - Performance degradation</pre>
+
+<div class="interview-tip">Interview tip: "I run validation in three phases. Pre-migration captures the baseline and confirms readiness. Post-migration validates technical function - services running, Kerberos working, no orphaned SQL users. Then UAT validates business function with the app owner. After sign-off, I maintain hyper-care for two weeks. I've seen issues surface 10 days later when a monthly batch job runs for the first time post-migration."</div>
+`
+    },
+    {
+      id: 'adm-server-app-migration',
+      title: 'Server Application Migration Patterns',
+      content: `
+<h4>What it is</h4>
+<p>When the JD says "on-premise to on-premise application migrations for servers," it means taking an application running on a server joined to the source domain and making it work in the target domain. There are three approaches, and you choose based on risk, complexity, and downtime tolerance.</p>
+
+<h4>Migration approach 1: IN-PLACE REMEDIATION (most common)</h4>
+<pre>WHAT: Keep the app on the same server. Update identity bindings.
+      Server gets re-joined to target domain.
+
+WHEN TO USE:
+  - App is tightly coupled to the server (installed, configured, data local)
+  - Rebuild would take too long or is too risky
+  - Downtime window is short
+
+STEPS:
+  1. Pre-migration: Document all identity bindings (service accounts, SPNs, etc.)
+  2. Create target domain accounts and groups
+  3. During window: Update service accounts to target domain
+  4. Update scheduled tasks
+  5. Update IIS app pools (if applicable)
+  6. Update config files with target domain references
+  7. Re-join server to target domain (requires reboot)
+      # Unjoin from source:
+      Remove-Computer -UnjoinDomainCredential SOURCEDOMAIN\\admin -Force
+      # Join to target:
+      Add-Computer -DomainName target.local -Credential TARGETDOMAIN\\admin -Restart
+  8. Verify services start under new accounts
+  9. Run validation
+
+RISK: Medium - lots of moving parts on a live server
+DOWNTIME: 1-4 hours typically</pre>
+
+<h4>Migration approach 2: CLONE/REBUILD (cleanest)</h4>
+<pre>WHAT: Build a new server in target domain, install app fresh,
+      migrate data from old to new.
+
+WHEN TO USE:
+  - App is simple to install
+  - Server OS needs upgrading anyway
+  - You want a clean state (no legacy cruft)
+  - Higher downtime tolerance
+
+STEPS:
+  1. Build new server, join to target domain
+  2. Install application on new server
+  3. Configure with target domain accounts
+  4. Migrate data (database restore, file copy, etc.)
+  5. Update DNS to point to new server
+  6. Validate
+  7. Keep old server as rollback for 2 weeks
+
+RISK: Low (clean build) but high effort
+DOWNTIME: 2-8 hours (data migration dependent)</pre>
+
+<h4>Migration approach 3: SWING MIGRATION</h4>
+<pre>WHAT: Use a temporary intermediate server to minimize downtime.
+      Old server -> copy to temp -> cutover -> copy to new.
+
+WHEN TO USE:
+  - Zero-downtime requirement
+  - Database replication available (SQL Always On, log shipping)
+  - Complex application that needs parallel running
+
+STEPS:
+  1. Set up SQL log shipping from old to new
+  2. Install app on new server (target domain)
+  3. Cutover: stop log shipping, bring new DB online
+  4. Update DNS to point to new server
+  5. Old server becomes rollback
+
+RISK: Low downtime, high complexity
+DOWNTIME: Minutes (DNS TTL dependent)</pre>
+
+<h4>Server domain re-join (the mechanics)</h4>
+<pre>When you re-join a server to a new domain, understand what happens:
+
+1. Computer account is removed from source domain
+2. Computer account is created in target domain
+3. Server reboots
+4. Server establishes secure channel with target DC
+5. Computer gets new SID
+6. Local group memberships referencing SOURCEDOMAIN are BROKEN
+   - "SOURCEDOMAIN\\Domain Admins" was in local Administrators -> GONE
+   - You must pre-add TARGETDOMAIN\\Domain Admins to local Administrators BEFORE re-join
+   - Otherwise you lock yourself out
+
+PRE-RE-JOIN CHECKLIST:
+  [ ] Add TARGETDOMAIN\\Domain Admins to local Administrators group
+      net localgroup Administrators TARGETDOMAIN\\Domain Admins /add
+  [ ] Add TARGETDOMAIN service accounts to required local groups
+  [ ] Document all local group memberships referencing source domain
+      Get-LocalGroupMember -Group "Administrators"
+      Get-LocalGroupMember -Group "Remote Desktop Users"
+  [ ] Ensure target DC is reachable (ports 88, 389, 445, 135, 464)
+  [ ] Have local admin credentials as backup (in case domain join fails)</pre>
+
+<h4>Application types and their special considerations</h4>
+<pre>IIS WEB APPLICATIONS:
+  - App pool identity (change to target domain)
+  - Web.config connection strings (update domain references)
+  - Windows authentication settings (allow target domain)
+  - SSL certificates (may reference old domain in SAN)
+  - Service account for app pool needs "Log on as a service" right
+
+FILE SERVERS:
+  - Share permissions reference source domain SIDs
+  - NTFS permissions reference source domain SIDs
+  - Quest or ADMT can re-ACL permissions to target domain SIDs
+  - DFS namespaces may need updating
+
+PRINT SERVERS:
+  - Printer permissions reference source domain groups
+  - Print drivers may need re-deployment
+  - GPO printer mappings need updating
+
+CERTIFICATE AUTHORITY:
+  - If source domain has AD Certificate Services, this is COMPLEX
+  - Certificates issued reference source domain in templates
+  - May need to migrate CA or build new one in target domain
+  - All certificates may need re-issuance
+
+MONITORING AGENTS (SCOM, Zabbix, etc.):
+  - Service account for monitoring agent
+  - May need re-registration with management server
+  - Alert thresholds may need updating for migration noise</pre>
+
+<div class="interview-tip">Interview tip: "I classify every application into one of three migration approaches: in-place remediation for complex apps that can't be rebuilt easily, clone/rebuild for simpler apps where we want a clean state, or swing migration for zero-downtime requirements using SQL log shipping. The decision depends on downtime tolerance, application complexity, and whether the server OS needs upgrading anyway."</div>
+`
+    },
+    {
+      id: 'adm-dns-certificates',
+      title: 'DNS, Certificates & Network Identity in Migration',
+      content: `
+<h4>DNS in a domain migration</h4>
+<p>DNS is the phonebook of your network. Every server, every application URL, every domain controller - all found via DNS. When you migrate domains, DNS gets complicated because the old domain name doesn't just disappear. Applications, scripts, bookmarks, and muscle memory all reference the old names.</p>
+
+<h4>DNS zones you're dealing with</h4>
+<pre>SOURCE DOMAIN DNS:
+  source.local (AD-integrated zone)
+    - DC records: dc01.source.local, dc02.source.local
+    - Server records: sqlserver01.source.local, appserver01.source.local
+    - SRV records: _ldap._tcp.source.local (how clients find DCs)
+    - Application CNAMEs: erp.source.local -> appserver01.source.local
+
+TARGET DOMAIN DNS:
+  target.local (AD-integrated zone)
+    - New DC records: dc01.target.local, dc02.target.local
+    - New server records: (created as servers join target domain)
+    - SRV records: _ldap._tcp.target.local
+    - Application CNAMEs: need to create these</pre>
+
+<h4>DNS migration strategy</h4>
+<pre>OPTION 1: CNAME BRIDGE (recommended during coexistence)
+  Keep old DNS names working by pointing them to new locations.
+  erp.source.local -> CNAME -> erp.target.local -> A record -> 10.0.1.50
+  This way, anything still using the old name still works.
+
+OPTION 2: CONDITIONAL FORWARDERS
+  Source DNS forwards queries for target.local to target DCs.
+  Target DNS forwards queries for source.local to source DCs.
+  Both domains can resolve each other.
+
+OPTION 3: STUB ZONES
+  Source DNS holds a copy of target.local NS records.
+  Lighter than conditional forwarder, auto-updates.
+
+DURING MIGRATION:
+  Phase 1: Set up conditional forwarders both directions
+  Phase 2: As servers migrate, update DNS records
+  Phase 3: Create CNAMEs from old names to new names
+  Phase 4: After decommission, keep CNAMEs for 6 months
+  Phase 5: Remove old DNS zone</pre>
+
+<h4>DNS records to update per server</h4>
+<pre>WHEN A SERVER MIGRATES TO TARGET DOMAIN:
+  1. New A record created automatically: server01.target.local
+  2. Old A record still exists: server01.source.local (points to same IP)
+  3. Create CNAME: server01.source.local -> server01.target.local
+     (only if old A record is removed)
+  4. Or: keep both A records during coexistence (both resolve)
+  5. Update application CNAMEs to point to new name
+  6. Reduce TTL before migration (300 seconds = 5 min, so changes propagate fast)
+
+CRITICAL: Reduce DNS TTL to 300 seconds 24-48 hours BEFORE the migration window.
+Default TTL is often 3600 (1 hour). If something goes wrong, you don't want to
+wait an hour for DNS to update during rollback.</pre>
+
+<h4>Certificates in a domain migration</h4>
+<pre>WHY CERTIFICATES BREAK:
+  Certificates contain the server's identity in the Subject and SAN fields.
+  Example: CN=erp.source.local, SAN=erp.source.local
+  If the server moves to target.local and clients access it via erp.target.local,
+  the certificate is for the wrong name -> browser/app shows certificate error.
+
+CERTIFICATE SCENARIOS:
+
+Scenario 1: Server keeps old DNS name (via CNAME)
+  Certificate still valid. No action needed.
+  erp.source.local CNAME -> erp.target.local -> cert is for erp.source.local -> matches
+
+Scenario 2: Server gets new DNS name
+  Need new certificate with new name.
+  Request cert: CN=erp.target.local, SAN=erp.target.local, erp.source.local
+  Including old name in SAN handles both during transition.
+
+Scenario 3: Internal CA (AD Certificate Services) on source domain
+  Templates reference source domain
+  Auto-enrollment uses source domain policies
+  Options:
+    a) Build new CA in target domain (recommended for inter-forest)
+    b) Migrate CA (complex, Microsoft has documentation)
+    c) Use public CA (Let's Encrypt, DigiCert) - simpler, no AD dependency
+
+CERTIFICATE CHECKLIST PER APPLICATION:
+  [ ] What certificate is installed? (thumbprint, CN, SAN, expiry)
+      Get-ChildItem Cert:\\LocalMachine\\My | Select Subject, Thumbprint, NotAfter
+  [ ] Does the certificate name match the new DNS name?
+  [ ] If not: request new certificate
+  [ ] If using auto-enrollment: configure in target domain CA
+  [ ] Update application binding to use new certificate
+      # IIS example:
+      netsh http show sslcert    (shows current binding)
+      # Update in IIS Manager > Site > Bindings > Edit</pre>
+
+<div class="interview-tip">Interview tip: "For DNS, I reduce TTL to 5 minutes 48 hours before migration so DNS changes propagate quickly during cutover. I set up conditional forwarders between domains for coexistence, and use CNAMEs from old names to new names so applications using the old DNS still resolve. For certificates, I request new certs with both old and new names in the SAN field to cover the transition period."</div>
+`
+    },
+    {
+      id: 'adm-computer-migration',
+      title: 'Computer & Workstation Migration',
+      content: `
+<h4>What it is</h4>
+<p>Every Windows computer in the source domain needs to be moved to the target domain. For 300+ workstations, this means a structured wave approach, not one-by-one. The computer gets a new domain membership, new GPOs apply, and the user logs in with target domain credentials.</p>
+
+<h4>Computer migration methods</h4>
+<pre>METHOD 1: QUEST MIGRATION MANAGER (recommended for scale)
+  - Quest agent on workstation handles the re-join
+  - Preserves local profiles (user doesn't lose desktop, files)
+  - Can be scripted and scheduled
+  - Handles local group membership update automatically
+  - Requires reboot
+
+METHOD 2: ADMT (Active Directory Migration Tool)
+  - Free Microsoft tool
+  - Computer Migration Wizard
+  - Translates local profiles and permissions
+  - Less automation than Quest
+  - Requires ADMT agent installed on target DC
+
+METHOD 3: MANUAL RE-JOIN
+  - Remove from source domain, join to target domain
+  - Simple but doesn't scale
+  - Risk of profile loss if not handled correctly
+  - Use for one-offs or troubleshooting
+
+METHOD 4: WINDOWS AUTOPILOT RESET (modern approach)
+  - If moving to cloud-managed (Intune) simultaneously
+  - Wipes and re-provisions device
+  - User gets fresh start
+  - Only if acceptable to lose local state</pre>
+
+<h4>Quest computer migration (step by step)</h4>
+<pre>PRE-MIGRATION:
+  1. User migration completed (user account exists in target domain)
+  2. Target domain groups created with correct membership
+  3. GPOs prepared in target domain
+  4. Quest agent deployed to workstation (can be pushed via GPO or SCCM)
+
+MIGRATION:
+  5. Quest console: select computers for this wave
+  6. Quest translates local profile:
+     - SOURCEDOMAIN\\jsmith profile -> TARGETDOMAIN\\jsmith profile
+     - Desktop, Documents, AppData, registry - all preserved
+  7. Quest updates local group memberships:
+     - Removes SOURCEDOMAIN\\Domain Users from local Users group
+     - Adds TARGETDOMAIN\\Domain Users
+     - Same for any other local group references
+  8. Quest re-joins computer to target domain
+  9. Computer reboots
+
+POST-MIGRATION:
+  10. User logs in with TARGETDOMAIN\\jsmith (or jsmith@target.local)
+  11. Target domain GPOs apply
+  12. User profile loads with all their files and settings
+  13. Validate: mapped drives, printers, applications all work</pre>
+
+<h4>User profile preservation (critical)</h4>
+<pre>THE PROBLEM:
+  Windows profiles are stored as: C:\\Users\\SOURCEDOMAIN.jsmith\\
+  When user logs in as TARGETDOMAIN\\jsmith, Windows creates NEW profile:
+  C:\\Users\\TARGETDOMAIN.jsmith\\
+  User loses: desktop icons, documents, favorites, app settings, Outlook profile
+
+THE SOLUTION (what Quest does):
+  Quest updates the profile registry keys to map the old profile to the new identity.
+  HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\
+  The SID-keyed profile entry gets updated with the new SID.
+  Result: User logs in with new domain credentials, gets their OLD profile.
+
+MANUAL APPROACH (if not using Quest):
+  1. Log in as local admin
+  2. Join computer to target domain
+  3. Reboot
+  4. Before user logs in:
+     - Note old profile SID in ProfileList registry
+     - Log in as TARGETDOMAIN\\jsmith (creates new profile)
+     - Log out
+     - Copy contents of old profile folder to new profile folder
+     - OR: Update registry to point new SID to old profile path
+  5. This is error-prone at scale - use Quest</pre>
+
+<h4>Wave planning for 300+ workstations</h4>
+<pre>WAVE STRUCTURE:
+  Wave 0: IT department (10 computers) - Week 1
+    Purpose: Prove the process works, find issues early
+    Duration: 1 day migration + 3 days hyper-care
+
+  Wave 1: Small department (20 computers) - Week 2
+    Purpose: First real business users, validate user experience
+    Duration: 1 day migration + 3 days hyper-care
+
+  Wave 2-5: Remaining departments (50-80 each) - Weeks 3-6
+    Purpose: Bulk migration, refined process
+    Duration: 1-2 days migration + 5 days hyper-care each
+
+  Wave 6: Stragglers and exceptions - Week 7
+    Purpose: VIPs, problematic machines, special configurations
+    Duration: As needed
+
+SCHEDULING:
+  - Migrate during off-hours (evening or weekend) to minimize disruption
+  - Or: migrate during work day with 30-min downtime per machine
+  - User communication: "Your computer will reboot at 2:00 PM, save all work"
+  - Have support staff on floor during wave for immediate issues
+
+COMMON POST-MIGRATION ISSUES:
+  - Mapped drives not connecting (GPO hasn't applied yet -> gpupdate /force)
+  - Printers missing (GPO-deployed printers need target domain GPO)
+  - Outlook profile broken (new profile needed, or Quest handles it)
+  - Application can't connect (still looking for source domain resources)
+  - Cached credentials (user laptop was offline during migration -> credential conflict)</pre>
+
+<div class="interview-tip">Interview tip: "For 300+ workstations, I'd use Quest Migration Manager with a wave approach. Wave 0 is IT staff - they're our test group and can troubleshoot their own issues. Each subsequent wave is a department, with the migration running after hours and desktop support on the floor the next morning. The key is profile preservation - Quest handles the profile SID mapping so users don't lose their desktop, documents, or application settings."</div>
+`
+    }
+  ]
 }
 ];
 
