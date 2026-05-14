@@ -4510,6 +4510,1624 @@ AFTER MIGRATION:
 `
     }
   ]
+},
+{
+  id: 'windows-server',
+  name: '10 Windows Server Administration',
+  desc: 'Core server roles, networking services, licensing, storage, and hands-on admin - technical assessment ready',
+  topics: [
+    {
+      id: 'ws-roles-features',
+      title: 'Server Roles & Features - Server Manager, Server Core, Installation',
+      content: `
+<h4>What it is</h4>
+<p>Windows Server is built around "roles" (major services like DNS, DHCP, File Server) and "features" (supporting components like .NET Framework, Telnet Client, Failover Clustering). You install only what you need. Every technical assessment starts here - can you install and configure roles?</p>
+
+<h4>Two installation modes</h4>
+<pre>DESKTOP EXPERIENCE (GUI):
+  Full Windows GUI with Server Manager, MMC snap-ins.
+  Used by: Most enterprise shops for ease of management.
+  When: When admins need visual management tools.
+
+SERVER CORE (no GUI):
+  Command line only. Smaller footprint, fewer patches, smaller attack surface.
+  Manage with: PowerShell, Windows Admin Center (browser-based), RSAT from another machine.
+  When: Production servers where you want minimal overhead.
+  Key: You CAN add GUI back later with Install-WindowsFeature Server-Gui-Mgmt-Infra</pre>
+
+<h4>Server Manager - the control center</h4>
+<pre>Server Manager opens automatically at login. From here you can:
+  1. Add Roles and Features (wizard-based)
+  2. Manage multiple servers from one console (Add Servers)
+  3. See alerts, status, and events across all managed servers
+  4. Create Server Groups (e.g., "Web Servers", "Domain Controllers")
+
+To add a role:
+  Server Manager > Manage > Add Roles and Features
+  Select: Role-based or feature-based installation
+  Choose target server
+  Pick the role (e.g., DHCP Server)
+  Accept dependent features when prompted
+  Install</pre>
+
+<h4>PowerShell equivalents (assessment ready)</h4>
+<pre># List all available roles and features
+Get-WindowsFeature
+
+# List only installed roles
+Get-WindowsFeature | Where-Object Installed
+
+# Install a role
+Install-WindowsFeature -Name DHCP -IncludeManagementTools
+Install-WindowsFeature -Name DNS -IncludeManagementTools
+Install-WindowsFeature -Name Print-Services -IncludeManagementTools
+Install-WindowsFeature -Name FS-FileServer
+Install-WindowsFeature -Name Web-Server -IncludeManagementTools   # IIS
+Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools
+Install-WindowsFeature -Name RDS-Licensing -IncludeManagementTools
+
+# Remove a role
+Uninstall-WindowsFeature -Name Telnet-Client
+
+# Check if a specific feature is installed
+(Get-WindowsFeature -Name DHCP).Installed</pre>
+
+<h4>Common roles you'll see on a technical assessment</h4>
+<pre>ROLE                    FEATURE NAME              WHAT IT DOES
+Active Directory DS     AD-Domain-Services         Domain controller
+DNS Server              DNS                        Name resolution
+DHCP Server             DHCP                       IP address assignment
+File Services           FS-FileServer              File shares, DFS
+Print Services          Print-Services             Print queues and drivers
+Web Server (IIS)        Web-Server                 Host websites/apps
+RDS Licensing           RDS-Licensing              Remote Desktop license server
+Failover Clustering     Failover-Clustering        HA for services
+Hyper-V                 Hyper-V                    Virtual machines
+WSUS                    UpdateServices             Patch management
+Certificate Services    AD-Certificate             Internal PKI/CA</pre>
+
+<div class="interview-tip">Interview tip: "I use Server Manager for initial role installation and group management, but all repeatable configurations are scripted in PowerShell. For Server Core deployments, I manage remotely through Windows Admin Center or PSRemoting. Every role installation includes -IncludeManagementTools so I have the MMC snap-ins for local troubleshooting."</div>
+`
+    },
+    {
+      id: 'ws-dhcp',
+      title: 'DHCP Server - Scopes, Reservations, Options, Failover',
+      content: `
+<h4>What it is</h4>
+<p>DHCP (Dynamic Host Configuration Protocol) automatically assigns IP addresses to devices on the network. Without DHCP, you'd manually configure every workstation, printer, and phone. In enterprise, DHCP servers hand out IPs from defined pools called scopes.</p>
+
+<h4>How DHCP works - the 4-step handshake (DORA)</h4>
+<pre>1. DISCOVER - Client broadcasts "I need an IP address" (UDP 67/68)
+2. OFFER    - DHCP server responds "Here's 10.0.1.50, available for 8 hours"
+3. REQUEST  - Client says "I'll take 10.0.1.50 please"
+4. ACK      - Server confirms "10.0.1.50 is yours for 8 hours"
+
+This is a BROADCAST. DHCP only works within the same subnet unless
+you configure a DHCP relay agent (ip helper-address on the router).</pre>
+
+<h4>Step-by-step: Install and configure DHCP</h4>
+<pre>STEP 1: Install the role
+  Install-WindowsFeature -Name DHCP -IncludeManagementTools
+
+STEP 2: Authorize the DHCP server in Active Directory
+  WHY: Prevents rogue DHCP servers on the network.
+  Only domain-joined, authorized DHCP servers can issue leases.
+
+  Add-DhcpServerInDC -DnsName dhcp01.contoso.com -IPAddress 10.0.1.10
+
+STEP 3: Create a scope (the IP pool)
+  Add-DhcpServerv4Scope -Name "Floor1-Workstations" \`
+    -StartRange 10.0.1.100 \`
+    -EndRange 10.0.1.200 \`
+    -SubnetMask 255.255.255.0 \`
+    -LeaseDuration 8:00:00 \`
+    -State Active
+
+  This creates a pool of 101 addresses (10.0.1.100 to 10.0.1.200).
+  Lease lasts 8 hours. Client must renew at 50% (4 hours).
+
+STEP 4: Set scope options (what clients get besides an IP)
+  Set-DhcpServerv4OptionValue -ScopeId 10.0.1.0 \`
+    -DnsServer 10.0.1.10,10.0.1.11 \`
+    -DnsDomain contoso.com \`
+    -Router 10.0.1.1
+
+  OPTIONS EXPLAINED:
+    Option 003 - Router/Default Gateway
+    Option 006 - DNS Servers
+    Option 015 - DNS Domain Name
+    Option 044 - WINS Servers (legacy, still seen in old environments)
+    Option 066 - Boot Server Host Name (PXE/SCCM)
+    Option 067 - Boot File Name (PXE/SCCM imaging)</pre>
+
+<h4>DHCP reservations</h4>
+<pre>A reservation ties a specific MAC address to a specific IP.
+Use for: printers, servers, network devices that need consistent IPs
+         but you still want DHCP to manage their config.
+
+Add-DhcpServerv4Reservation -ScopeId 10.0.1.0 \`
+  -IPAddress 10.0.1.50 \`
+  -ClientId "AA-BB-CC-DD-EE-FF" \`
+  -Name "Printer-Floor1"
+
+WHY reservations instead of static IPs?
+  - Central management: change DNS servers in one place, all reserved devices get the update
+  - Tracking: see all assignments in DHCP console
+  - No login needed: don't need to touch the device to change network settings</pre>
+
+<h4>DHCP exclusion ranges</h4>
+<pre># Exclude IPs from being handed out (for static devices, servers)
+Add-DhcpServerv4ExclusionRange -ScopeId 10.0.1.0 \`
+  -StartRange 10.0.1.1 -EndRange 10.0.1.20
+
+This reserves .1 through .20 for static assignments (routers, DCs, etc.)</pre>
+
+<h4>DHCP failover (high availability)</h4>
+<pre>Two modes:
+  HOT STANDBY: Primary serves all leases. Standby takes over if primary dies.
+    Use when: Branch office with one DHCP server and a backup in the datacenter.
+
+  LOAD BALANCE (50/50): Both servers actively serve leases. Default split is 50/50.
+    Use when: Both servers are in the same datacenter/site.
+
+Add-DhcpServerv4Failover -Name "DHCP-Failover" \`
+  -PartnerServer "dhcp02.contoso.com" \`
+  -ScopeId 10.0.1.0 \`
+  -SharedSecret "P@ssw0rd!" \`
+  -LoadBalancePercent 50
+
+KEY: Both servers must be authorized in AD.
+KEY: Failover replicates scopes, reservations, and leases automatically.</pre>
+
+<h4>Troubleshooting DHCP</h4>
+<pre>CLIENT NOT GETTING AN IP:
+  1. ipconfig /release && ipconfig /renew    (force new lease)
+  2. Check scope has available addresses     (Get-DhcpServerv4ScopeStatistics)
+  3. Check scope is Active, not Inactive
+  4. Check DHCP relay agent if client is on different subnet
+  5. Check Windows Firewall on DHCP server (UDP 67/68 must be allowed)
+  6. Check DHCP server is authorized in AD
+
+CLIENT GETTING WRONG GATEWAY/DNS:
+  Check scope options vs server options vs policy options.
+  Scope options override server options.
+  Reservation options override scope options.
+
+SCOPE FULL:
+  Get-DhcpServerv4ScopeStatistics -ScopeId 10.0.1.0
+  Shows: AddressesFree, AddressesInUse, PercentageInUse
+  Fix: Expand range, shorten lease duration, or find stale leases</pre>
+
+<h4>GUI walkthrough (what you'll see on assessment)</h4>
+<pre>1. Open DHCP Management Console (dhcpmgmt.msc)
+2. Expand server name > IPv4
+3. Right-click IPv4 > New Scope (wizard walks you through)
+4. Under the scope:
+   - Address Pool: shows range and exclusions
+   - Address Leases: shows who has what IP right now
+   - Reservations: shows MAC-to-IP bindings
+   - Scope Options: shows gateway, DNS, domain name
+5. Right-click server > Authorize (if not already authorized)</pre>
+
+<div class="interview-tip">Interview tip: "I configure DHCP with exclusion ranges for infrastructure devices, reservations for printers and servers that need consistent IPs, and scope options for DNS and gateway. For redundancy, I set up DHCP failover in load-balance mode between two servers. I always authorize in AD first - unauthorized DHCP servers won't serve leases, which is a security feature to prevent rogue DHCP."</div>
+`
+    },
+    {
+      id: 'ws-dns',
+      title: 'Windows DNS Server - Zones, Records, Forwarders, Conditional Forwarding',
+      content: `
+<h4>What it is</h4>
+<p>Windows DNS Server resolves hostnames to IP addresses (and vice versa). In Active Directory environments, DNS is required - AD literally cannot function without it. Domain controllers are almost always DNS servers too. Every domain join, login, and Group Policy lookup relies on DNS.</p>
+
+<h4>Zone types</h4>
+<pre>PRIMARY ZONE:
+  Read/write copy of the zone. This server is authoritative.
+  Changes are made here and replicated to secondary zones.
+
+SECONDARY ZONE:
+  Read-only copy. Pulls updates from the primary via zone transfer.
+  Use for: redundancy, load distribution, branch offices.
+
+AD-INTEGRATED ZONE (most common in enterprise):
+  Zone data stored in Active Directory (not a flat file).
+  Every DC with DNS role has a read/write copy.
+  Replication uses AD replication (automatic, encrypted, multi-master).
+  WHY THIS IS BEST: No single point of failure. Any DC can accept changes.
+  Supports secure dynamic updates (only domain-joined machines can register).
+
+STUB ZONE:
+  Contains only NS and SOA records for a zone.
+  Use for: pointing to another DNS server for a specific domain
+  without doing a full zone transfer.
+
+CONDITIONAL FORWARDER:
+  "For queries about partner.com, ask 192.168.5.10"
+  Use for: resolving partner/subsidiary domains, cross-forest trust resolution.
+  Add-DnsServerConditionalForwarderZone -Name "partner.com" \`
+    -MasterServers 192.168.5.10,192.168.5.11</pre>
+
+<h4>DNS record types (must know cold)</h4>
+<pre>RECORD    PURPOSE                           EXAMPLE
+A         Hostname to IPv4                   server01 -> 10.0.1.50
+AAAA      Hostname to IPv6                   server01 -> 2001:db8::50
+CNAME     Alias to another name              mail -> exchange01.contoso.com
+MX        Mail server for domain             contoso.com -> mail.contoso.com (priority 10)
+PTR       IP to hostname (reverse lookup)    10.0.1.50 -> server01.contoso.com
+SRV       Service location (AD uses these)   _ldap._tcp.contoso.com -> dc01 (port 389)
+NS        Name server for zone               contoso.com -> dc01.contoso.com
+SOA       Start of Authority (zone metadata) Serial number, refresh, retry, expire
+TXT       Text record (SPF, DKIM, DMARC)     "v=spf1 include:spf.protection.outlook.com"</pre>
+
+<h4>Step-by-step: Set up DNS on a new server</h4>
+<pre>STEP 1: Install DNS role
+  Install-WindowsFeature -Name DNS -IncludeManagementTools
+
+STEP 2: Create a forward lookup zone
+  Add-DnsServerPrimaryZone -Name "contoso.com" \`
+    -ReplicationScope Domain \`
+    -DynamicUpdate Secure
+
+  -ReplicationScope Domain = replicate to all DCs in this domain
+  -DynamicUpdate Secure = only domain-joined machines can auto-register
+
+STEP 3: Create a reverse lookup zone
+  Add-DnsServerPrimaryZone -NetworkId "10.0.1.0/24" \`
+    -ReplicationScope Domain \`
+    -DynamicUpdate Secure
+
+  WHY: Enables PTR record lookups (IP to name). Needed for:
+    - nslookup reverse queries
+    - Some applications that verify connecting client names
+    - Logging and audit trails
+
+STEP 4: Add records
+  # A record
+  Add-DnsServerResourceRecordA -ZoneName "contoso.com" \`
+    -Name "server01" -IPv4Address "10.0.1.50"
+
+  # CNAME
+  Add-DnsServerResourceRecordCName -ZoneName "contoso.com" \`
+    -Name "intranet" -HostNameAlias "webserver01.contoso.com"
+
+  # MX record
+  Add-DnsServerResourceRecordMX -ZoneName "contoso.com" \`
+    -Name "." -MailExchange "mail.contoso.com" -Preference 10
+
+STEP 5: Configure forwarders (where to send queries you can't resolve)
+  Set-DnsServerForwarder -IPAddress 8.8.8.8,8.8.4.4
+  NOTE: In enterprise, forward to internal DNS first, then internet.</pre>
+
+<h4>DNS troubleshooting commands</h4>
+<pre># Check what DNS server a client is using
+  ipconfig /all | findstr "DNS"
+
+# Query a specific record
+  nslookup server01.contoso.com
+  nslookup -type=MX contoso.com
+  nslookup -type=SRV _ldap._tcp.contoso.com
+
+# Resolve-DnsName (PowerShell, more detailed)
+  Resolve-DnsName -Name server01.contoso.com -Type A
+  Resolve-DnsName -Name contoso.com -Type MX
+
+# Clear DNS cache
+  Clear-DnsClientCache          # Client-side
+  Clear-DnsServerCache          # Server-side
+
+# Check DNS server health
+  Test-DnsServer -IPAddress 10.0.1.10 -ZoneName contoso.com
+
+# See all records in a zone
+  Get-DnsServerResourceRecord -ZoneName "contoso.com"
+
+# Find specific record
+  Get-DnsServerResourceRecord -ZoneName "contoso.com" -Name "server01"</pre>
+
+<h4>AD-specific DNS records (SRV records)</h4>
+<pre>Active Directory registers SRV records so clients can find:
+  _ldap._tcp.contoso.com          - Domain controllers
+  _kerberos._tcp.contoso.com      - Kerberos authentication
+  _gc._tcp.contoso.com            - Global Catalog servers
+  _ldap._tcp.sitename._sites...   - Site-specific DCs
+
+If these are missing, clients can't find DCs.
+Fix: Restart Netlogon service on the DC (re-registers SRV records)
+  Restart-Service Netlogon
+
+Or manually trigger:
+  nltest /dsregdns</pre>
+
+<div class="interview-tip">Interview tip: "I use AD-integrated DNS zones because they replicate with AD automatically, support secure dynamic updates, and eliminate single points of failure. For cross-forest resolution, I set up conditional forwarders. When troubleshooting DNS, I start with nslookup to verify resolution, check SRV records to ensure AD can locate domain controllers, and verify the forwarder chain if external resolution fails."</div>
+`
+    },
+    {
+      id: 'ws-rds-licensing',
+      title: 'RDS Licensing - License Server Setup, CALs, Per-User vs Per-Device',
+      content: `
+<h4>What it is</h4>
+<p>Remote Desktop Services (RDS) licensing controls who can connect to Windows Server via Remote Desktop. By default, Windows Server allows a 120-day grace period with 2 concurrent admin connections. Beyond that, you need RDS Client Access Licenses (CALs) and a license server. If you don't set this up, users get locked out after the grace period expires.</p>
+
+<h4>Licensing modes (must know the difference)</h4>
+<pre>PER-USER CAL:
+  One license per user. That user can connect from any device.
+  Best for: Users who connect from multiple devices (laptop, home PC, phone).
+  Tracking: License server tracks which users have been issued a CAL.
+  Advantage: Users roam freely across devices.
+
+PER-DEVICE CAL:
+  One license per device. Anyone can use that device to connect.
+  Best for: Shared workstations, kiosks, call centers, shift workers.
+  Tracking: License server tracks which devices have been issued a CAL.
+  Advantage: Multiple users can share a device's license.
+
+KEY DECISION:
+  Count your users vs count your devices.
+  More users than devices? Per-Device is cheaper.
+  More devices than users? Per-User is cheaper.
+  Most enterprises use Per-User because people have multiple devices.</pre>
+
+<h4>Step-by-step: Set up RDS License Server</h4>
+<pre>STEP 1: Install the RDS Licensing role
+  Install-WindowsFeature -Name RDS-Licensing -IncludeManagementTools
+
+  This installs the license server role and the RD Licensing Manager console.
+
+STEP 2: Activate the license server
+  Open: Remote Desktop Licensing Manager (licmgr.exe)
+  Right-click server > Activate Server
+  Choose connection method:
+    - Automatic (internet) - server contacts Microsoft directly
+    - Web Browser - if server has no internet, use another machine
+    - Telephone - call Microsoft licensing center
+  Enter your company info and agreement number.
+  After activation, the server can issue temporary and permanent CALs.
+
+STEP 3: Install CALs (Client Access Licenses)
+  In RD Licensing Manager:
+  Right-click server > Install Licenses
+  Choose license program:
+    - Enterprise Agreement
+    - Open License
+    - Select License
+    - Service Provider License Agreement
+    - Other
+  Enter your agreement/authorization number.
+  Select license type: Per User or Per Device.
+  Enter quantity.
+  Licenses appear in the console.
+
+STEP 4: Point your RD Session Host to the license server
+  This tells the server WHERE to get licenses.
+
+  Via Group Policy (recommended for multiple servers):
+    Computer Configuration > Administrative Templates >
+    Windows Components > Remote Desktop Services >
+    Remote Desktop Session Host > Licensing
+
+    - "Use the specified Remote Desktop license servers"
+      Set to: rdlic01.contoso.com (your license server FQDN)
+
+    - "Set the Remote Desktop licensing mode"
+      Set to: Per User or Per Device (must match your CALs)
+
+  Via PowerShell:
+    $obj = Get-WmiObject -Namespace "root/cimv2/TerminalServices" \`
+      -Class Win32_TerminalServiceSetting
+    $obj.SetSpecifiedLicenseServerList("rdlic01.contoso.com")
+    $obj.ChangeMode(4)   # 4 = Per User, 2 = Per Device
+
+STEP 5: Verify licensing is working
+  In RD Licensing Diagnoser (built into Server Manager):
+    Server Manager > Remote Desktop Services > RD Licensing Diagnoser
+    Should show: "The licensing mode for the RD Session Host server is configured"
+    and "License server is reachable"</pre>
+
+<h4>Grace period and troubleshooting</h4>
+<pre>THE 120-DAY GRACE PERIOD:
+  After installing the RD Session Host role, you have 120 days
+  before licensing enforcement kicks in.
+  After grace period expires WITHOUT a license server configured:
+    - Users see "No Remote Desktop License Server available"
+    - They get disconnected or can't connect at all.
+    - Only 2 admin RDP sessions remain (mstsc /admin)
+
+CHECK GRACE PERIOD REMAINING:
+  # Days remaining in grace period
+  (Invoke-WmiMethod -Path 'Win32_TerminalServiceSetting' \`
+    -Namespace root/cimv2/TerminalServices \`
+    -Name GetGracePeriodDays).DaysLeft
+
+COMMON ISSUES:
+  "No license server available":
+    1. Is the license server role installed? Get-WindowsFeature RDS-Licensing
+    2. Is the license server activated? Check RD Licensing Manager
+    3. Is the GPO pointing to the right server? rsop.msc on the session host
+    4. Can the session host reach the license server? Test-NetConnection rdlic01 -Port 135
+    5. Is Windows Firewall blocking? RPC (135) + dynamic ports must be open
+    6. Is the license server in the same AD forest? Cross-forest requires trust + DNS
+
+  "License mode mismatch":
+    The GPO says Per-User but you installed Per-Device CALs (or vice versa).
+    Fix: Match the GPO setting to the CAL type you purchased.
+
+  "Not enough CALs":
+    Get-WmiObject Win32_TSLicenseKeyPack -Namespace root/cimv2
+    Check TotalLicenses vs IssuedLicenses. Buy more if needed.</pre>
+
+<h4>Network license server (application licensing)</h4>
+<pre>Some enterprise applications use a NETWORK LICENSE SERVER model.
+This is different from RDS licensing but uses the same concept:
+
+HOW IT WORKS:
+  1. Install the vendor's license server software on a Windows Server
+  2. Activate with your license file or product key
+  3. Configure client applications to point to the license server
+  4. License server tracks concurrent usage (e.g., 50 seats of AutoCAD)
+  5. If all seats are in use, the next user gets "no license available"
+
+COMMON EXAMPLES:
+  - Autodesk License Manager (FlexLM/FlexNet) - AutoCAD, Revit, etc.
+  - Adobe License Server - Creative Suite (legacy)
+  - MATLAB License Manager
+  - SolidWorks SolidNetwork License Manager
+
+SETUP PATTERN (same for most vendors):
+  1. Dedicate a server (can be a VM, low resource needs)
+  2. Get the server's MAC address or hostname (license is tied to this)
+  3. Request license file from vendor using this identifier
+  4. Install license manager service
+  5. Import/place license file in correct directory
+  6. Start the license service
+  7. Configure firewall to allow license port (varies by vendor)
+     - FlexLM typically uses ports 27000-27009
+     - Some vendors use custom ports
+  8. Configure client software to point to license server
+     Example: server=@licserver01.contoso.com or port@hostname
+
+TROUBLESHOOTING:
+  - "No license available" - check concurrent usage vs purchased seats
+  - "Cannot connect to license server" - firewall, DNS, service not running
+  - "License expired" - renew with vendor, update license file, restart service
+  - Server rebuild - license is tied to MAC/hostname, contact vendor for rehost</pre>
+
+<div class="interview-tip">Interview tip: "I've set up RDS licensing in Per-User mode for environments where users connect from multiple devices. The key steps are installing the licensing role, activating with Microsoft, installing CALs that match your licensing mode, and pointing session hosts via Group Policy. For application licensing like AutoCAD or MATLAB, I configure a dedicated license server with the vendor's FlexLM service and ensure the firewall allows the licensing port."</div>
+`
+    },
+    {
+      id: 'ws-file-print',
+      title: 'File Server & Print Server - Shares, NTFS, DFS, Print Queues, GPO Deployment',
+      content: `
+<h4>What it is</h4>
+<p>File servers host shared folders for departments. Print servers centralize printer management. Both are bread-and-butter Windows Server roles that every admin must know how to set up, permission, and troubleshoot.</p>
+
+<h4>File shares - setting up a shared folder</h4>
+<pre>STEP 1: Create the folder
+  New-Item -Path "D:\\Shares\\Finance" -ItemType Directory
+
+STEP 2: Share it on the network
+  New-SmbShare -Name "Finance$" -Path "D:\\Shares\\Finance" \`
+    -FullAccess "CONTOSO\\Finance-Admins" \`
+    -ChangeAccess "CONTOSO\\Finance-Users" \`
+    -ReadAccess "CONTOSO\\Domain Users"
+
+  The $ makes it a HIDDEN share (doesn't show in network browse).
+  Users access it by typing: \\\\fileserver01\\Finance$
+
+TWO LAYERS OF PERMISSIONS (must understand both):
+  SHARE PERMISSIONS (network access):
+    - Full Control, Change, Read
+    - Applied when accessing over the network
+    - Best practice: Set share to "Everyone: Full Control"
+      and control access through NTFS permissions
+
+  NTFS PERMISSIONS (file system):
+    - Full Control, Modify, Read & Execute, List, Read, Write
+    - Applied whether accessed locally or over the network
+    - This is where you do granular control
+    - Inherited from parent folder by default
+
+  THE RULE: When both apply, the MOST RESTRICTIVE wins.
+    Share says: Full Control
+    NTFS says: Read
+    Result: User gets Read</pre>
+
+<h4>NTFS permissions - PowerShell</h4>
+<pre># View current permissions
+  Get-Acl "D:\\Shares\\Finance" | Format-List
+
+# Grant Modify to a group
+  $acl = Get-Acl "D:\\Shares\\Finance"
+  $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+    "CONTOSO\\Finance-Users","Modify","ContainerInherit,ObjectInherit","None","Allow")
+  $acl.SetAccessRule($rule)
+  Set-Acl "D:\\Shares\\Finance" $acl
+
+# Remove inheritance and convert to explicit permissions
+  $acl = Get-Acl "D:\\Shares\\Finance"
+  $acl.SetAccessRuleProtection($true, $true)  # true = protect, true = copy inherited
+  Set-Acl "D:\\Shares\\Finance" $acl</pre>
+
+<h4>DFS (Distributed File System)</h4>
+<pre>DFS NAMESPACES:
+  Creates a virtual path that hides the actual server name.
+  Users access: \\\\contoso.com\\shares\\finance
+  Behind the scenes: mapped to \\\\fileserver01\\finance$
+  WHY: If you move data to a new server, update the DFS target.
+       Users never change their mapped drive. No disruption.
+
+DFS REPLICATION (DFS-R):
+  Replicates folders between servers automatically.
+  Use for: Branch office file servers, DR copies, multi-site access.
+  Uses RDC (Remote Differential Compression) - only syncs changed blocks.
+
+SETUP:
+  Install-WindowsFeature FS-DFS-Namespace, FS-DFS-Replication -IncludeManagementTools
+  # Then configure in DFS Management console (dfsmgmt.msc)</pre>
+
+<h4>Print Server</h4>
+<pre>STEP 1: Install Print Services role
+  Install-WindowsFeature Print-Services -IncludeManagementTools
+
+STEP 2: Add a printer
+  Open: Print Management console (printmanagement.msc)
+  Expand: Print Servers > Your Server > Printers
+  Right-click > Add Printer
+  Choose:
+    - TCP/IP: Enter printer IP address (e.g., 10.0.1.200)
+    - Install driver: Use built-in or download from manufacturer
+
+  PowerShell:
+  # Add printer port
+  Add-PrinterPort -Name "IP_10.0.1.200" -PrinterHostAddress "10.0.1.200"
+
+  # Add printer driver
+  Add-PrinterDriver -Name "HP Universal Printing PCL 6"
+
+  # Add printer
+  Add-Printer -Name "Finance-HP-Floor2" \`
+    -DriverName "HP Universal Printing PCL 6" \`
+    -PortName "IP_10.0.1.200" \`
+    -Shared -ShareName "Finance-HP-Floor2" \`
+    -Published   # Publishes to AD so users can search for it
+
+STEP 3: Deploy printer via Group Policy
+  Group Policy Management > Create/Edit GPO
+  User Configuration > Preferences > Control Panel Settings > Printers
+  Right-click > New > Shared Printer
+  Share path: \\\\printserver01\\Finance-HP-Floor2
+  Action: Create
+  Set as default: Yes/No
+  Targeting: Item-level targeting to specific OU, group, or IP range
+
+  This auto-maps the printer for users at login. No manual setup needed.
+
+STEP 4: Printer pooling (optional)
+  Multiple identical printers behind a single queue.
+  User sends to "Finance-Printer" and the job goes to whichever is available.
+  Set up: Add multiple ports to one printer in printer properties.</pre>
+
+<h4>Troubleshooting</h4>
+<pre>FILE SHARE:
+  "Access Denied" - Check NTFS permissions AND share permissions. Both must allow.
+  "Network path not found" - DNS issue, server offline, or firewall blocking SMB (445).
+  Test: Test-NetConnection fileserver01 -Port 445
+
+PRINTER:
+  "Printer offline" - Ping the printer IP. Check printer web interface.
+  "Print spooler error" - Restart-Service Spooler
+  "Jobs stuck in queue" - Stop spooler, clear C:\\Windows\\System32\\spool\\PRINTERS, start spooler
+  "Driver mismatch" - Remove and reinstall printer driver. Use universal drivers when possible.</pre>
+
+<div class="interview-tip">Interview tip: "I set share permissions to Everyone Full Control and manage all access through NTFS permissions for simplicity. I use DFS Namespaces so users connect to a domain-based path instead of a specific server name - that way I can migrate data without disrupting mapped drives. For printers, I deploy via Group Policy with item-level targeting so the right printers map to the right users based on their location or department."</div>
+`
+    },
+    {
+      id: 'ws-windows-firewall',
+      title: 'Windows Firewall - Profiles, Rules, GPO Deployment, Troubleshooting',
+      content: `
+<h4>What it is</h4>
+<p>Windows Defender Firewall with Advanced Security is the built-in host-based firewall on every Windows machine. It filters inbound and outbound traffic using rules. In enterprise, you manage firewall rules centrally through Group Policy.</p>
+
+<h4>Three firewall profiles</h4>
+<pre>DOMAIN PROFILE:
+  Active when the computer is connected to its AD domain network.
+  Typically the most permissive (trusted internal network).
+  Applied when: Machine can reach a domain controller.
+
+PRIVATE PROFILE:
+  Active on networks marked as "private" (home, small office).
+  Moderate restrictions.
+
+PUBLIC PROFILE:
+  Active on unknown/untrusted networks (coffee shop, hotel).
+  Most restrictive. Blocks most inbound by default.
+
+KEY: A server connected to the domain uses the Domain profile.
+     If it can't reach a DC, it may fall to Public (very restrictive).
+     This causes "works on the network, suddenly stops" issues.</pre>
+
+<h4>Creating firewall rules</h4>
+<pre># Allow inbound RDP (TCP 3389)
+New-NetFirewallRule -DisplayName "Allow RDP" \`
+  -Direction Inbound -Protocol TCP -LocalPort 3389 \`
+  -Action Allow -Profile Domain
+
+# Allow ICMP (ping)
+New-NetFirewallRule -DisplayName "Allow Ping" \`
+  -Direction Inbound -Protocol ICMPv4 -IcmpType 8 \`
+  -Action Allow -Profile Domain,Private
+
+# Allow SQL Server (TCP 1433)
+New-NetFirewallRule -DisplayName "Allow SQL" \`
+  -Direction Inbound -Protocol TCP -LocalPort 1433 \`
+  -Action Allow -Profile Domain \`
+  -RemoteAddress 10.0.1.0/24   # Only from this subnet
+
+# Allow a program
+New-NetFirewallRule -DisplayName "Allow MyApp" \`
+  -Direction Inbound -Program "D:\\Apps\\MyApp.exe" \`
+  -Action Allow -Profile Domain
+
+# Block outbound to a specific IP
+New-NetFirewallRule -DisplayName "Block Outbound" \`
+  -Direction Outbound -RemoteAddress 203.0.113.50 \`
+  -Action Block
+
+# View all rules
+Get-NetFirewallRule | Format-Table DisplayName, Enabled, Direction, Action
+
+# Disable a rule
+Disable-NetFirewallRule -DisplayName "Allow RDP"
+
+# Remove a rule
+Remove-NetFirewallRule -DisplayName "Allow RDP"</pre>
+
+<h4>Deploy firewall rules via Group Policy</h4>
+<pre>Group Policy Management > Edit GPO
+Computer Configuration > Policies > Windows Settings >
+  Security Settings > Windows Defender Firewall with Advanced Security
+
+Inbound Rules > New Rule:
+  Rule Type: Port (or Program, Custom)
+  Protocol: TCP
+  Ports: 3389
+  Action: Allow the connection
+  Profile: Domain (check/uncheck as needed)
+  Name: "Allow RDP - Domain"
+
+This pushes to all computers in the OU.
+Result: gpupdate /force on clients to apply immediately.
+
+BEST PRACTICE:
+  - Manage firewall rules via GPO, not locally on each server
+  - Use "Domain" profile for internal traffic
+  - Log dropped packets for troubleshooting:
+    Set-NetFirewallProfile -Profile Domain \`
+      -LogAllowed False -LogBlocked True \`
+      -LogFileName "C:\\Windows\\System32\\LogFiles\\Firewall\\pfirewall.log" \`
+      -LogMaxSizeKilobytes 4096</pre>
+
+<h4>Troubleshooting</h4>
+<pre>1. CHECK WHICH PROFILE IS ACTIVE:
+   Get-NetConnectionProfile
+   If it says "Public" on a domain server, that's the problem.
+   Fix: Restart NLA service, verify DC reachability, check DNS.
+
+2. TEST IF FIREWALL IS BLOCKING:
+   # Temporarily disable to test (re-enable immediately after!)
+   Set-NetFirewallProfile -Profile Domain -Enabled False
+   # If it works now, it's a firewall rule issue
+   Set-NetFirewallProfile -Profile Domain -Enabled True
+
+3. CHECK FIREWALL LOGS:
+   Get-Content "C:\\Windows\\System32\\LogFiles\\Firewall\\pfirewall.log" -Tail 50
+
+4. CHECK EFFECTIVE RULES:
+   Get-NetFirewallRule -Enabled True -Direction Inbound |
+     Get-NetFirewallPortFilter | Where-Object LocalPort -eq 443
+
+5. TEST CONNECTIVITY:
+   Test-NetConnection server01 -Port 443
+   Test-NetConnection server01 -Port 3389</pre>
+
+<div class="interview-tip">Interview tip: "I manage Windows Firewall rules centrally through Group Policy so every server gets consistent rules. I use the Domain profile for internal traffic and keep the Public profile restrictive as a safety net. When troubleshooting connectivity, I first check which firewall profile is active - if a domain server falls to the Public profile because it can't reach a DC, most inbound traffic gets blocked."</div>
+`
+    },
+    {
+      id: 'ws-failover-clustering',
+      title: 'Failover Clustering - Quorum, Shared Storage, Roles, Validation',
+      content: `
+<h4>What it is</h4>
+<p>Failover clustering groups two or more servers (nodes) so that if one fails, the other automatically takes over. Used for critical services like SQL Server, file servers, Hyper-V, and DHCP. The cluster presents a single virtual name and IP - clients don't know or care which physical node is active.</p>
+
+<h4>Key concepts</h4>
+<pre>NODE: A server that is a member of the cluster (minimum 2).
+ROLE: A service that runs on the cluster (e.g., SQL Server, File Server).
+      The role "lives" on one node at a time and can move to another.
+FAILOVER: When a role moves from a failed node to a healthy node.
+FAILBACK: When a role moves back to the original node after it recovers.
+HEARTBEAT: Network traffic between nodes to detect failures.
+           If a node stops responding, the cluster moves the role.
+CLUSTER NETWORK NAME (CNO): The virtual computer name for the cluster.
+           Clients connect to this, not individual nodes.</pre>
+
+<h4>Quorum - how the cluster decides who's in charge</h4>
+<pre>Quorum prevents "split-brain" - where both nodes think they're primary.
+
+QUORUM MODELS:
+  NODE MAJORITY:
+    More than half the nodes must be online. (3 nodes = need 2)
+    Use for: 3+ node clusters.
+
+  NODE AND DISK MAJORITY:
+    Nodes + a shared "witness disk" vote. The disk gets a vote.
+    Use for: 2-node clusters (2 nodes + 1 disk = 3 votes, need 2).
+
+  NODE AND FILE SHARE MAJORITY:
+    Nodes + a file share witness vote.
+    Use for: Multi-site clusters where shared storage isn't possible.
+    The witness share can be on any server (even in a 3rd site).
+
+  CLOUD WITNESS (Azure):
+    Uses an Azure Storage account as the witness.
+    Best for: Stretched clusters, avoids needing a 3rd site.
+    Set-ClusterQuorum -CloudWitness \`
+      -AccountName "mywitness" -AccessKey "key..."
+
+BEST PRACTICE FOR 2-NODE CLUSTER:
+  Use File Share Witness or Cloud Witness.
+  Without a witness, if one node dies, the other might not have quorum.</pre>
+
+<h4>Step-by-step: Build a 2-node failover cluster</h4>
+<pre>PREREQUISITES:
+  - 2 servers, same hardware specs, same OS version, domain-joined
+  - Shared storage (SAN via iSCSI or Fibre Channel, or Storage Spaces Direct)
+  - At least 2 networks: one for client traffic, one for heartbeat
+  - All nodes can resolve each other via DNS
+
+STEP 1: Install Failover Clustering feature on both nodes
+  Install-WindowsFeature Failover-Clustering -IncludeManagementTools
+
+STEP 2: Validate the cluster configuration
+  THIS IS REQUIRED. Microsoft won't support a cluster that wasn't validated.
+  Test-Cluster -Node node01,node02
+
+  This checks: storage, networking, system configuration, Hyper-V settings.
+  Review the report. Fix all errors. Warnings are acceptable.
+
+STEP 3: Create the cluster
+  New-Cluster -Name "YOURCLUSTER" \`
+    -Node node01,node02 \`
+    -StaticAddress 10.0.1.100
+
+  This creates:
+    - The cluster object in AD (computer account)
+    - The cluster IP address
+    - Starts the cluster service on both nodes
+
+STEP 4: Configure quorum
+  # File share witness
+  Set-ClusterQuorum -FileShareWitness "\\\\fileserver\\ClusterWitness"
+
+  # Or Cloud Witness
+  Set-ClusterQuorum -CloudWitness -AccountName "storageacct" -AccessKey "key"
+
+STEP 5: Add storage (for traditional shared-disk clusters)
+  # After presenting LUNs from SAN, add to cluster
+  Get-ClusterAvailableDisk | Add-ClusterDisk
+
+STEP 6: Create a clustered role (example: File Server)
+  Add-ClusterFileServerRole -Name "YOURFS" \`
+    -Storage "Cluster Disk 1" \`
+    -StaticAddress 10.0.1.101
+
+  Now clients connect to \\\\YOURFS\\sharename</pre>
+
+<h4>Cluster management</h4>
+<pre># View cluster nodes and status
+  Get-ClusterNode
+  Get-ClusterNode | Format-Table Name, State
+
+# View clustered roles
+  Get-ClusterGroup
+
+# Move a role to another node (manual failover)
+  Move-ClusterGroup -Name "YOURFS" -Node node02
+
+# Take a node offline for maintenance
+  Suspend-ClusterNode -Name node01 -Drain   # Moves all roles off first
+  # Do maintenance...
+  Resume-ClusterNode -Name node01
+
+# View cluster events
+  Get-ClusterLog -Destination C:\\Temp</pre>
+
+<h4>Common clustered workloads</h4>
+<pre>SQL Server Always On FCI:
+  SQL instance runs on cluster. Shared disk for databases.
+  If node fails, SQL service starts on other node. Same instance name.
+
+Hyper-V (Live Migration):
+  VMs can move between cluster nodes with zero downtime.
+  Cluster Shared Volumes (CSV) store VM files on shared storage.
+
+File Server:
+  Scale-out File Server for Hyper-V/SQL workloads.
+  General-use File Server for user data.
+
+DHCP:
+  Clustered DHCP for high availability of IP address assignment.</pre>
+
+<div class="interview-tip">Interview tip: "I set up failover clusters with validation first - Test-Cluster is required and catches storage and network issues before they become production problems. For a two-node cluster, I always configure a cloud witness or file share witness for quorum. I use Suspend-ClusterNode with -Drain before maintenance so all roles gracefully move to the other node."</div>
+`
+    },
+    {
+      id: 'ws-smtp-relay',
+      title: 'SMTP Relay - Server Setup, Relay Restrictions, M365 Integration',
+      content: `
+<h4>What it is</h4>
+<p>Many enterprise applications and devices (scanners, monitoring tools, line-of-business apps) need to send email but can't authenticate to Exchange/M365 directly. An SMTP relay server accepts email from internal sources and forwards it to your mail system. It acts as a middleman.</p>
+
+<h4>Three ways to send email in an M365 environment</h4>
+<pre>1. SMTP CLIENT SUBMISSION (most secure):
+   Server: smtp.office365.com, Port 587, TLS required
+   Requires: A licensed M365 mailbox + username/password or OAuth
+   Use when: App supports modern auth or basic SMTP auth
+   Limitation: Can only send as the authenticated user's address
+
+2. DIRECT SEND (to M365 directly):
+   Server: contoso-com.mail.protection.outlook.com, Port 25
+   No auth needed, but can only send to internal recipients
+   Use when: App sends to internal users only (monitoring alerts)
+   Limitation: Cannot send to external recipients
+
+3. SMTP RELAY via IIS or Windows SMTP (most flexible):
+   Internal server accepts email on port 25 from apps/devices
+   Relays through M365 or on-prem Exchange
+   Use when: Devices can't do TLS/auth (older scanners, legacy apps)
+   Can send to internal AND external recipients</pre>
+
+<h4>Step-by-step: Set up SMTP relay on Windows Server (IIS SMTP)</h4>
+<pre>STEP 1: Install IIS SMTP feature
+  Install-WindowsFeature SMTP-Server -IncludeManagementTools
+  # Also need IIS 6 Management tools
+  Install-WindowsFeature Web-Mgmt-Compat
+
+STEP 2: Configure SMTP in IIS 6.0 Manager
+  Open: IIS 6.0 Manager (inetmgr6.exe) - NOT regular IIS Manager
+  Expand: [SMTP Virtual Server #1]
+  Right-click > Properties
+
+  GENERAL TAB:
+    IP Address: Set to server's internal IP (not "All Unassigned")
+    Limit connections to: 1000 (or appropriate)
+
+  ACCESS TAB:
+    Authentication: Anonymous (internal devices can't authenticate)
+    Connection: Only allow specific IP ranges (your subnet)
+      Add: 10.0.0.0 / 255.0.0.0 (your internal network)
+    Relay: Only allow specific IP ranges
+      Add: 10.0.0.0 / 255.0.0.0
+      CRITICAL: Uncheck "Allow all computers which successfully
+                authenticate to relay" if using anonymous
+
+  DELIVERY TAB:
+    Advanced > Smart Host: smtp.office365.com
+    (or your Exchange server: exchange01.contoso.com)
+    Outbound Security: TLS enabled
+    Port: 25 (or 587 for M365 with auth)
+
+STEP 3: Configure M365 connector (if relaying through M365)
+  In Exchange Admin Center > Mail Flow > Connectors:
+    Create connector: From "Your organization's email server" to "Office 365"
+    Authenticate by: IP address of your SMTP relay server
+    Add the public IP of your relay server
+
+STEP 4: Configure DNS (SPF record)
+  Add your relay server's public IP to your SPF TXT record:
+    v=spf1 ip4:YOUR.PUBLIC.IP include:spf.protection.outlook.com ~all
+  WHY: Without this, emails relayed through your server may be marked spam
+
+STEP 5: Test
+  # From the relay server itself:
+  Send-MailMessage -From "scanner@contoso.com" \`
+    -To "admin@contoso.com" \`
+    -Subject "Test Relay" \`
+    -Body "Testing SMTP relay" \`
+    -SmtpServer localhost
+
+  # From a device on the network:
+  telnet smtprelay01 25
+  EHLO test
+  MAIL FROM:<scanner@contoso.com>
+  RCPT TO:<admin@contoso.com>
+  DATA
+  Subject: Test
+  Test message
+  .
+  QUIT</pre>
+
+<h4>Security: Relay restrictions (CRITICAL)</h4>
+<pre>AN OPEN RELAY IS A SECURITY DISASTER.
+  An open relay allows ANYONE on the internet to send email through your server.
+  Your IP gets blacklisted within hours. All your email starts bouncing.
+
+ALWAYS RESTRICT:
+  1. Bind to internal IP only (not public-facing)
+  2. Allow relay ONLY from known internal IP ranges
+  3. Do not allow anonymous relay from the internet
+  4. Use a firewall to block port 25 from external sources
+  5. Monitor relay logs for abuse</pre>
+
+<h4>Troubleshooting</h4>
+<pre>"Emails not sending":
+  1. Check SMTP service is running: Get-Service SMTPSVC
+  2. Check queue: C:\\inetpub\\mailroot\\Queue (messages stuck here)
+  3. Check badmail: C:\\inetpub\\mailroot\\Badmail (failed messages here)
+  4. Check event logs: Event Viewer > Application
+  5. Test connectivity to smart host: Test-NetConnection smtp.office365.com -Port 25
+  6. Check relay restrictions (are you allowing the source IP?)
+
+"Emails going to spam":
+  1. Check SPF record includes your relay IP
+  2. Check DKIM and DMARC records
+  3. Check if your IP is blacklisted: mxtoolbox.com/blacklists</pre>
+
+<div class="interview-tip">Interview tip: "I set up internal SMTP relay servers for legacy applications and multifunction scanners that can't authenticate to M365 directly. The relay accepts email from internal IPs only, forwards through a smart host to Exchange Online, and I always lock down relay restrictions to prevent open relay. The server's public IP is added to our SPF record so relayed messages pass email authentication checks."</div>
+`
+    },
+    {
+      id: 'ws-storage-disk',
+      title: 'Storage & Disk Management - Volumes, RAID, Storage Spaces, iSCSI',
+      content: `
+<h4>What it is</h4>
+<p>Storage management is knowing how to configure disks, create volumes, set up RAID for redundancy, and connect to network storage. On a technical assessment, you'll be asked to bring a new disk online, partition it, format it, and possibly set up a storage pool.</p>
+
+<h4>Disk basics</h4>
+<pre>MBR vs GPT:
+  MBR (Master Boot Record): Legacy. Max 2TB per disk. Max 4 primary partitions.
+  GPT (GUID Partition Table): Modern. Max 18 exabytes. 128 partitions.
+  ALWAYS USE GPT for new disks. MBR only for legacy compatibility.
+
+BASIC DISK vs DYNAMIC DISK:
+  Basic: Standard partitions. Used by 99% of servers.
+  Dynamic: Supports spanning, striping, mirroring across disks.
+  Modern approach: Use Storage Spaces instead of dynamic disks.</pre>
+
+<h4>Disk management - PowerShell (assessment ready)</h4>
+<pre># List all disks
+Get-Disk
+
+# Initialize a new disk (raw disk just added)
+Initialize-Disk -Number 1 -PartitionStyle GPT
+
+# Create a partition using all available space
+New-Partition -DiskNumber 1 -UseMaximumSize -AssignDriveLetter
+
+# Format with NTFS
+Format-Volume -DriveLetter E -FileSystem NTFS -NewFileSystemLabel "Data"
+
+# One-liner: Initialize, partition, format
+Get-Disk -Number 1 | Initialize-Disk -PartitionStyle GPT -PassThru |
+  New-Partition -UseMaximumSize -AssignDriveLetter |
+  Format-Volume -FileSystem NTFS -NewFileSystemLabel "Data"
+
+# Extend a volume (after adding space to virtual disk)
+$maxSize = (Get-PartitionSupportedSize -DriveLetter E).SizeMax
+Resize-Partition -DriveLetter E -Size $maxSize
+
+# Check disk space
+Get-Volume | Format-Table DriveLetter, FileSystemLabel, Size, SizeRemaining</pre>
+
+<h4>RAID levels (must know for assessment)</h4>
+<pre>RAID 0 - STRIPING:
+  Data spread across multiple disks. Fast reads/writes.
+  NO REDUNDANCY. If one disk fails, all data is lost.
+  Use: Temporary data, caches. Never for production.
+
+RAID 1 - MIRRORING:
+  Exact copy on two disks. If one fails, the other has all data.
+  Cost: 50% capacity (2x 1TB disks = 1TB usable).
+  Use: OS drives, boot volumes.
+
+RAID 5 - STRIPING WITH PARITY:
+  Data + parity spread across 3+ disks. Can survive one disk failure.
+  Cost: Lose one disk worth of capacity (3x 1TB = 2TB usable).
+  Use: General purpose file storage. Good read performance.
+
+RAID 6 - DOUBLE PARITY:
+  Like RAID 5 but can survive TWO disk failures.
+  Cost: Lose two disks worth (4x 1TB = 2TB usable).
+  Use: Large arrays where double failure is a real risk.
+
+RAID 10 (1+0) - MIRROR + STRIPE:
+  Mirrors pairs of disks, then stripes across the pairs.
+  Fast reads/writes AND redundancy.
+  Cost: 50% capacity (4x 1TB = 2TB usable).
+  Use: Databases, high-performance workloads.</pre>
+
+<h4>Storage Spaces (Windows Server built-in)</h4>
+<pre>Storage Spaces is Microsoft's software-defined storage.
+Pool physical disks together, then create virtual disks with resiliency.
+
+CONCEPTS:
+  STORAGE POOL: Group of physical disks managed as one unit.
+  VIRTUAL DISK: Carved from the pool with a resiliency type.
+  VOLUME: Formatted partition on the virtual disk.
+
+RESILIENCY TYPES:
+  Simple: No redundancy (like RAID 0). Performance only.
+  Mirror: 2-way or 3-way mirror (like RAID 1).
+  Parity: Distributed parity (like RAID 5/6). Space efficient.
+
+SETUP:
+# Create a storage pool from physical disks
+$disks = Get-PhysicalDisk -CanPool $true
+New-StoragePool -FriendlyName "DataPool" \`
+  -StorageSubSystemFriendlyName "Windows*" \`
+  -PhysicalDisks $disks
+
+# Create a mirrored virtual disk
+New-VirtualDisk -StoragePoolFriendlyName "DataPool" \`
+  -FriendlyName "MirrorDisk" \`
+  -ResiliencySettingName Mirror \`
+  -Size 500GB
+
+# Initialize, partition, and format
+Get-VirtualDisk -FriendlyName "MirrorDisk" | Get-Disk |
+  Initialize-Disk -PartitionStyle GPT -PassThru |
+  New-Partition -UseMaximumSize -AssignDriveLetter |
+  Format-Volume -FileSystem NTFS -NewFileSystemLabel "MirrorData"</pre>
+
+<h4>iSCSI (network-attached storage)</h4>
+<pre>iSCSI lets a server access SAN storage over the regular network (TCP).
+The server sees the remote storage as a local disk.
+
+TERMINOLOGY:
+  TARGET: The storage device (SAN) presenting the disk.
+  INITIATOR: The server connecting to the target.
+  LUN: Logical Unit Number - a specific disk/volume on the target.
+  IQN: iSCSI Qualified Name - unique identifier for initiator/target.
+
+CONNECT TO iSCSI TARGET:
+  # Start iSCSI service (must be running)
+  Start-Service msiscsi
+  Set-Service msiscsi -StartupType Automatic
+
+  # Discover targets
+  New-IscsiTargetPortal -TargetPortalAddress 10.0.2.100
+
+  # Connect to target
+  Connect-IscsiTarget -NodeAddress "iqn.2024.com.contoso:storage01"
+
+  # The disk now appears in Get-Disk as a new disk
+  # Initialize and format as normal
+
+MULTIPATH (MPIO):
+  For redundancy, connect to the same target via two network paths.
+  Install-WindowsFeature Multipath-IO
+  # Configure in MPIO control panel or mpclaim.exe</pre>
+
+<div class="interview-tip">Interview tip: "For new disks, I initialize as GPT, create a partition, and format NTFS. For redundancy I use RAID 10 for databases and RAID 5/6 for file storage. On Windows Server, Storage Spaces provides software-defined mirroring and parity without a hardware RAID controller. For SAN connectivity, I configure the iSCSI initiator with multipath for redundancy so a single path failure doesn't lose storage access."</div>
+`
+    },
+    {
+      id: 'ws-perfmon-eventlog',
+      title: 'Performance Monitor & Event Logs - Counters, Baselines, Data Collectors, Troubleshooting',
+      content: `
+<h4>What it is</h4>
+<p>Performance Monitor (perfmon) and Event Viewer are the two primary troubleshooting tools on any Windows Server. Perfmon shows you real-time and historical performance data. Event Viewer shows you what happened, when, and why. On a technical assessment, you'll be asked to identify bottlenecks and find errors using these tools.</p>
+
+<h4>Performance Monitor (perfmon.msc)</h4>
+<pre>CRITICAL COUNTERS (memorize these):
+
+CPU:
+  Processor\\% Processor Time         Target: < 85% sustained
+  System\\Processor Queue Length       Target: < 2x number of cores
+  WHAT TO LOOK FOR: Consistently above threshold = CPU bottleneck
+
+MEMORY:
+  Memory\\Available MBytes             Target: > 20% of total RAM
+  Memory\\Pages/sec                    Target: < 1000
+  Memory\\% Committed Bytes In Use     Target: < 80%
+  WHAT TO LOOK FOR: Low available memory + high pages/sec = paging to disk
+
+DISK:
+  PhysicalDisk\\Avg. Disk Queue Length  Target: < 2 per spindle
+  PhysicalDisk\\% Disk Time            Target: < 85%
+  PhysicalDisk\\Avg. Disk sec/Read     Target: < 15ms (HDD), < 5ms (SSD)
+  PhysicalDisk\\Avg. Disk sec/Write    Target: < 15ms (HDD), < 5ms (SSD)
+  WHAT TO LOOK FOR: High queue + high latency = disk bottleneck
+
+NETWORK:
+  Network Interface\\Bytes Total/sec   Compare to NIC speed
+  Network Interface\\Output Queue Length Target: < 2
+  WHAT TO LOOK FOR: Approaching NIC capacity = network bottleneck</pre>
+
+<h4>Data Collector Sets (automated monitoring)</h4>
+<pre>WHAT: Scheduled performance data collection. Runs in background,
+      saves to files, can be analyzed later.
+
+CREATE A BASELINE:
+  # Create a data collector set
+  Open perfmon > Data Collector Sets > User Defined
+  Right-click > New > Data Collector Set
+  Name: "Server Baseline"
+  Create manually
+  Add: Performance counters (the critical ones above)
+  Schedule: Run for 24 hours during normal business day
+  Save location: D:\\PerfLogs
+
+  This gives you a BASELINE - what "normal" looks like.
+  When something goes wrong, compare current metrics to baseline.
+
+PowerShell:
+  # Create a collector set
+  $counters = @(
+    "\\Processor(_Total)\\% Processor Time",
+    "\\Memory\\Available MBytes",
+    "\\PhysicalDisk(_Total)\\Avg. Disk Queue Length",
+    "\\Network Interface(*)\\Bytes Total/sec"
+  )
+  # Use logman to create and start
+  logman create counter "Baseline" -c $counters \`
+    -si 15 -f bincirc -max 500 -o "D:\\PerfLogs\\Baseline"
+  logman start "Baseline"
+
+  # Stop after collection period
+  logman stop "Baseline"</pre>
+
+<h4>Event Viewer (eventvwr.msc)</h4>
+<pre>KEY LOGS:
+  Application    - App crashes, SQL errors, backup failures
+  Security       - Logon success/failure, permission changes, audit events
+  System         - Driver failures, service crashes, disk errors, NTP issues
+  Setup          - Windows Update installation results
+
+EVENT LEVELS:
+  Critical       - System failure, data loss imminent
+  Error          - Significant problem (service failed to start)
+  Warning        - Potential problem (disk space low)
+  Information    - Normal operation logged
+
+IMPORTANT EVENT IDS TO KNOW:
+  4624  - Successful logon (Security)
+  4625  - Failed logon (Security) - brute force detection
+  4740  - Account locked out (Security)
+  1074  - System shutdown/restart initiated (System)
+  6008  - Unexpected shutdown (System) - server crashed
+  7036  - Service started/stopped (System)
+  41    - Kernel power (unexpected reboot)
+  1001  - Windows Error Reporting (Application)
+  1102  - Audit log cleared (Security) - possible cover-up</pre>
+
+<h4>PowerShell event log queries</h4>
+<pre># Get recent errors from System log
+Get-EventLog -LogName System -EntryType Error -Newest 20
+
+# Get failed logons in the last 24 hours
+Get-WinEvent -FilterHashtable @{
+  LogName = 'Security'
+  Id = 4625
+  StartTime = (Get-Date).AddHours(-24)
+}
+
+# Get account lockouts
+Get-WinEvent -FilterHashtable @{
+  LogName = 'Security'
+  Id = 4740
+} | Select-Object TimeCreated, Message
+
+# Get unexpected reboots
+Get-WinEvent -FilterHashtable @{
+  LogName = 'System'
+  Id = 6008
+}
+
+# Export events to CSV for analysis
+Get-WinEvent -FilterHashtable @{
+  LogName = 'System'
+  Level = 2  # Error
+  StartTime = (Get-Date).AddDays(-7)
+} | Export-Csv "C:\\Temp\\SystemErrors.csv" -NoTypeInformation
+
+# Search for a specific string in events
+Get-WinEvent -LogName Application |
+  Where-Object { $_.Message -like "*SQL*" } |
+  Select-Object TimeCreated, Id, Message -First 10</pre>
+
+<h4>Quick troubleshooting workflow</h4>
+<pre>SERVER IS SLOW - systematic approach:
+  1. Task Manager (quick look): CPU? Memory? Disk?
+  2. Resource Monitor (resmon): Which process is consuming?
+  3. Perfmon: Detailed counters for the bottleneck area
+  4. Event Viewer: Any errors correlated with the slowness?
+
+  PowerShell quick checks:
+    # Top CPU processes
+    Get-Process | Sort-Object CPU -Descending | Select-Object -First 10
+
+    # Memory usage
+    Get-Process | Sort-Object WorkingSet64 -Descending |
+      Select-Object Name, @{N='MB';E={[math]::Round($_.WorkingSet64/1MB)}} -First 10
+
+    # Disk space
+    Get-Volume | Where-Object DriveLetter | Format-Table DriveLetter, SizeRemaining, Size
+
+    # Uptime (when was last reboot?)
+    (Get-CimInstance Win32_OperatingSystem).LastBootUpTime</pre>
+
+<div class="interview-tip">Interview tip: "When a server is slow, I follow a systematic approach: Task Manager for the quick overview, then Resource Monitor to identify the specific process, then Performance Monitor for detailed counters. I compare against baselines I've established using Data Collector Sets. For post-incident analysis, I correlate Event Viewer timestamps with performance data to identify root cause. The four key areas are CPU, memory, disk, and network - I check counters in that order."</div>
+`
+    },
+    {
+      id: 'ws-certificate-services',
+      title: 'Certificate Services (AD CS) - Internal PKI, Templates, Auto-Enrollment',
+      content: `
+<h4>What it is</h4>
+<p>Active Directory Certificate Services (AD CS) lets you run your own internal Certificate Authority (CA). Instead of buying certificates from a public CA for every internal service, you issue your own. Used for: internal websites (HTTPS), Wi-Fi authentication (802.1X), VPN certificates, code signing, email encryption (S/MIME), and smart card logon.</p>
+
+<h4>PKI hierarchy</h4>
+<pre>ROOT CA (offline, most secure):
+  The trust anchor. Signs the subordinate CA's certificate.
+  Should be: Offline, air-gapped, powered off. Only turned on to issue/renew sub-CA certs.
+  WHY OFFLINE: If root CA is compromised, ALL certificates are untrusted.
+
+SUBORDINATE/ISSUING CA (online, does the work):
+  Issues certificates to users, computers, and services.
+  Gets its own certificate from the root CA.
+  This is the CA that's always running and serving requests.
+
+SINGLE-TIER (just a root CA, no subordinate):
+  Simpler. Used in small environments or labs.
+  Risk: If compromised, everything is compromised, and you can't revoke it.
+
+TWO-TIER (root + subordinate):
+  Enterprise standard. Root is offline, subordinate issues certs.
+  If subordinate is compromised, revoke its cert and build a new one.</pre>
+
+<h4>Step-by-step: Set up Enterprise CA</h4>
+<pre>STEP 1: Install AD CS role
+  Install-WindowsFeature AD-Certificate -IncludeManagementTools
+
+STEP 2: Configure CA (post-install wizard)
+  Install-AdcsCertificationAuthority \`
+    -CAType EnterpriseSubordinateCA \`
+    -CACommonName "Contoso-Issuing-CA" \`
+    -KeyLength 4096 \`
+    -HashAlgorithmName SHA256 \`
+    -ValidityPeriod Years \`
+    -ValidityPeriodUnits 5
+
+  CA TYPES:
+    Enterprise CA: Integrated with AD. Can use templates. Auto-enrollment.
+                   Must be on a domain-joined server.
+    Standalone CA: Not AD-integrated. Manual approval. Used for root CA.
+
+STEP 3: Configure certificate templates
+  Open: Certificate Templates Console (certtmpl.msc)
+  Templates define: What kind of cert, who can request, key size, validity.
+
+  Common templates:
+    Web Server        - HTTPS for internal websites
+    Computer          - Machine authentication (802.1X, IPsec)
+    User              - User authentication, email signing
+    Domain Controller - DC authentication
+    Code Signing      - Sign scripts and executables
+
+  To customize: Duplicate an existing template, modify, then publish.
+  Right-click template > Duplicate Template
+  Change: Subject name, validity period, key size, permissions.
+
+STEP 4: Publish templates
+  Open: Certification Authority console (certsrv.msc)
+  Expand: CA name > Certificate Templates
+  Right-click > New > Certificate Template to Issue
+  Select your template.
+
+STEP 5: Auto-enrollment via Group Policy
+  Computer Configuration > Policies > Windows Settings >
+    Security Settings > Public Key Policies >
+    Certificate Services Client - Auto-Enrollment
+  Set to: Enabled
+  Check: Renew expired certificates, update pending certificates
+
+  This makes domain computers automatically request and renew certs.
+  No manual process needed.</pre>
+
+<h4>Common tasks</h4>
+<pre># View issued certificates
+  Get-ChildItem Cert:\\LocalMachine\\My
+
+# Request a certificate manually
+  # Open certlm.msc (Local Machine certificates)
+  # Personal > Certificates > Right-click > Request New Certificate
+
+# Revoke a certificate
+  # In certsrv.msc > Issued Certificates > Right-click > Revoke
+
+# Check CRL (Certificate Revocation List)
+  certutil -verify -urlfetch servercert.cer
+
+# Export a certificate
+  $cert = Get-ChildItem Cert:\\LocalMachine\\My | Where-Object Subject -like "*webserver*"
+  Export-Certificate -Cert $cert -FilePath "C:\\Certs\\webserver.cer"
+
+# Check CA health
+  certutil -ping</pre>
+
+<h4>Troubleshooting</h4>
+<pre>"Certificate not trusted":
+  - Is the root CA cert in Trusted Root Certification Authorities?
+  - Auto-distributed via Group Policy for Enterprise CAs
+  - Manual import for standalone CAs or non-domain machines
+
+"Auto-enrollment not working":
+  1. Check GPO is applied: gpresult /r
+  2. Check template permissions: Enroll + Autoenroll for target group
+  3. Check template is published on the CA
+  4. Run: certutil -pulse (force auto-enrollment check)
+
+"Certificate expired":
+  - Auto-enrollment should renew before expiry
+  - Check template setting: "Renew when X% of validity has passed"
+  - Manual renewal: certlm.msc > right-click cert > Renew</pre>
+
+<div class="interview-tip">Interview tip: "I deploy a two-tier PKI with an offline root CA and an online Enterprise subordinate CA integrated with Active Directory. Certificate templates control what gets issued and to whom. I configure auto-enrollment via Group Policy so computers and users automatically get and renew certificates without manual intervention. This is how we enable internal HTTPS, 802.1X Wi-Fi authentication, and VPN certificate-based auth."</div>
+`
+    },
+    {
+      id: 'ws-gpo-deep-dive',
+      title: 'Group Policy - Processing Order, Troubleshooting, Common Policies',
+      content: `
+<h4>What it is</h4>
+<p>Group Policy Objects (GPOs) let you centrally manage settings for users and computers across your domain. From password policies to mapped drives to firewall rules to software installation - GPO is how enterprise Windows environments enforce configuration at scale.</p>
+
+<h4>GPO processing order (LSDOU)</h4>
+<pre>L - LOCAL policy   (gpedit.msc on the machine itself)
+S - SITE policy     (AD site the computer is in)
+D - DOMAIN policy   (applies to entire domain)
+OU - OU policy      (organizational unit the object is in)
+
+LAST ONE WINS. If Domain policy sets wallpaper to blue,
+and OU policy sets wallpaper to red, the OU policy wins
+because it processes last.
+
+EXCEPTIONS:
+  ENFORCED (No Override): A GPO marked "Enforced" cannot be
+    overridden by child OUs. Domain-level enforced GPO always wins.
+  BLOCK INHERITANCE: An OU can block all parent GPOs from applying.
+    But Enforced GPOs still apply (Enforced beats Block).
+
+SECURITY FILTERING:
+  By default GPOs apply to "Authenticated Users".
+  You can filter to specific groups:
+    Remove "Authenticated Users" from Security Filtering
+    Add your specific group (e.g., "Finance-Users")
+    MUST also have "Domain Computers" with Read permission
+    for computer-targeted settings to apply.</pre>
+
+<h4>Must-know GPO settings</h4>
+<pre>PASSWORD POLICY (Domain-level only):
+  Computer Config > Policies > Windows Settings > Security Settings >
+    Account Policies > Password Policy
+    - Minimum length: 12+ characters
+    - Complexity: Enabled (upper, lower, number, special)
+    - Maximum age: 90 days
+    - History: Remember 24 passwords
+
+ACCOUNT LOCKOUT:
+  Same path > Account Lockout Policy
+    - Threshold: 5 invalid attempts
+    - Duration: 30 minutes
+    - Reset counter: 30 minutes
+
+MAPPED DRIVES:
+  User Config > Preferences > Windows Settings > Drive Maps
+    Action: Create/Replace
+    Location: \\\\fileserver\\finance$
+    Drive Letter: F:
+    Item-level targeting: Finance security group
+
+SOFTWARE INSTALLATION:
+  Computer Config > Policies > Software Settings > Software Installation
+    Add .msi package from network share
+    Assign = auto-install. Publish = available in Programs.
+
+WINDOWS UPDATE:
+  Computer Config > Administrative Templates >
+    Windows Components > Windows Update
+    Configure Automatic Updates: 4 - Auto download and schedule install
+    Specify intranet update service: http://wsus01:8530
+
+POWER/DISPLAY:
+  Computer Config > Administrative Templates > System > Power Management
+  User Config > Administrative Templates > Control Panel > Display
+
+RESTRICT USB:
+  Computer Config > Administrative Templates > System >
+    Removable Storage Access > All Removable Storage: Deny All</pre>
+
+<h4>Troubleshooting GPO</h4>
+<pre># Force GPO refresh (don't wait for 90-minute cycle)
+gpupdate /force
+
+# See what GPOs are applied to this machine/user
+gpresult /r              # Summary
+gpresult /h report.html  # Detailed HTML report - BEST for troubleshooting
+
+# Check specific policy settings via RSoP
+rsop.msc                 # Resultant Set of Policy (GUI)
+
+# From a DC, check GPO replication
+Get-GPO -All | Select-Object DisplayName, GpoStatus, ModificationTime
+
+# Check if GPO is linked to the right OU
+Get-GPOReport -Name "Security-Baseline" -ReportType Html \`
+  -Path "C:\\Temp\\gpo-report.html"
+
+# Common issues:
+"GPO not applying":
+  1. Is the computer/user in the right OU? (Get-ADComputer/Get-ADUser)
+  2. Is the GPO linked to that OU? (check GPMC)
+  3. Security filtering - does the user/computer have Read + Apply?
+  4. Is the GPO enabled? (check GpoStatus: AllSettingsEnabled)
+  5. WMI filter blocking it? (check WMI filter on the GPO)
+  6. Block Inheritance on the OU?
+  7. Slow link detection? (if on VPN, some GPOs skip)
+
+  GOLDEN RULE: Run gpresult /h on the problem machine.
+  It shows EXACTLY which GPOs applied and which were denied and why.</pre>
+
+<h4>GPO best practices</h4>
+<pre>1. NEVER modify Default Domain Policy (except password/lockout)
+2. NEVER modify Default Domain Controllers Policy (unless required)
+3. Create separate GPOs by function:
+   - "Security-Baseline" for security settings
+   - "Drive-Maps-Finance" for department-specific mappings
+   - "WSUS-Config" for update settings
+4. Name GPOs descriptively (not "New GPO 1")
+5. Document every GPO and what it does
+6. Test in a TEST OU before applying to production
+7. Use Group Policy Modeling (What-If) before linking:
+   GPMC > Group Policy Modeling wizard</pre>
+
+<div class="interview-tip">Interview tip: "I follow the principle of separation - one GPO per function, named descriptively, and tested in a test OU before production. When troubleshooting, I run gpresult /h on the affected machine to get the exact picture of what's applied and what's denied. The processing order is Local, Site, Domain, OU - last one wins unless the parent GPO is enforced."</div>
+`
+    },
+    {
+      id: 'ws-iis',
+      title: 'IIS Web Server - Sites, Bindings, App Pools, SSL Certificates',
+      content: `
+<h4>What it is</h4>
+<p>Internet Information Services (IIS) is the Windows web server. It hosts websites, web applications, and APIs. On a technical assessment, you'll set up a site, configure bindings (HTTP/HTTPS), set up an application pool, and bind an SSL certificate.</p>
+
+<h4>Step-by-step: Install and configure IIS</h4>
+<pre>STEP 1: Install IIS
+  Install-WindowsFeature Web-Server -IncludeManagementTools
+
+  This installs:
+    - IIS web server
+    - IIS Manager console (inetmgr)
+    - Default website on port 80
+
+STEP 2: Open IIS Manager
+  Run: inetmgr
+  You'll see: Server > Sites > Default Web Site
+
+STEP 3: Create a new website
+  # PowerShell
+  New-WebSite -Name "IntranetApp" \`
+    -PhysicalPath "D:\\WebApps\\IntranetApp" \`
+    -Port 80 \`
+    -HostHeader "intranet.contoso.com"
+
+  # In IIS Manager: Right-click Sites > Add Website
+  Site name: IntranetApp
+  Physical path: D:\\WebApps\\IntranetApp
+  Binding: HTTP, port 80, hostname: intranet.contoso.com</pre>
+
+<h4>Application Pools</h4>
+<pre>WHAT: An app pool is an isolated worker process (w3wp.exe).
+      Each app pool runs independently. If one crashes, others are fine.
+
+WHY THEY MATTER:
+  - Isolation: Different apps don't affect each other
+  - Identity: Each pool runs as a specific account (security boundary)
+  - Recycling: Pools restart periodically to prevent memory leaks
+
+# Create app pool
+New-WebAppPool -Name "IntranetPool"
+
+# Set identity (who the pool runs as)
+Set-ItemProperty "IIS:\\AppPools\\IntranetPool" \`
+  -Name processModel.identityType -Value SpecificUser
+Set-ItemProperty "IIS:\\AppPools\\IntranetPool" \`
+  -Name processModel.userName -Value "CONTOSO\\svc-intranet"
+Set-ItemProperty "IIS:\\AppPools\\IntranetPool" \`
+  -Name processModel.password -Value "P@ssw0rd"
+
+# Assign pool to site
+Set-ItemProperty "IIS:\\Sites\\IntranetApp" \`
+  -Name applicationPool -Value "IntranetPool"
+
+COMMON APP POOL IDENTITIES:
+  ApplicationPoolIdentity (default): Virtual account. Least privilege.
+  NetworkService: Legacy. Can access network resources.
+  Specific User: Service account. Use when app needs domain permissions
+                 (SQL access, file share access, etc.)
+
+RECYCLING:
+  Default: Recycles every 1740 minutes (29 hours).
+  Custom: Set specific times (e.g., 3 AM nightly).
+  Set-ItemProperty "IIS:\\AppPools\\IntranetPool" \`
+    -Name recycling.periodicRestart.schedule -Value @{value="03:00:00"}</pre>
+
+<h4>SSL/TLS certificate binding</h4>
+<pre>STEP 1: Get a certificate
+  Option A: Request from internal CA (AD CS)
+    Open certlm.msc > Personal > Certificates > Request New Certificate
+    Select "Web Server" template
+    Fill in CN=intranet.contoso.com
+
+  Option B: Import a .pfx file
+    Import-PfxCertificate -FilePath "C:\\Certs\\intranet.pfx" \`
+      -CertStoreLocation Cert:\\LocalMachine\\My \`
+      -Password (ConvertTo-SecureString "certpass" -AsPlainText -Force)
+
+STEP 2: Add HTTPS binding
+  # Find certificate thumbprint
+  Get-ChildItem Cert:\\LocalMachine\\My |
+    Where-Object Subject -like "*intranet*" |
+    Select-Object Thumbprint, Subject
+
+  # Add HTTPS binding
+  New-WebBinding -Name "IntranetApp" \`
+    -Protocol https -Port 443 \`
+    -HostHeader "intranet.contoso.com" \`
+    -SslFlags 1   # 1 = SNI (Server Name Indication)
+
+  # Bind the certificate
+  $thumb = "AABBCC..."  # your cert thumbprint
+  (Get-WebBinding -Name "IntranetApp" -Protocol https).AddSslCertificate($thumb, "My")
+
+STEP 3: Force HTTPS redirect (optional)
+  Install URL Rewrite module, then add rule:
+  In IIS Manager > URL Rewrite > Add Rule > Blank Rule
+    Condition: {HTTPS} = OFF
+    Action: Redirect to https://{HTTP_HOST}{REQUEST_URI}
+    Redirect type: 301 (Permanent)</pre>
+
+<h4>Troubleshooting</h4>
+<pre>"Site not loading":
+  1. Is the app pool running? Get-WebAppPoolState -Name "IntranetPool"
+  2. Start it: Start-WebAppPool -Name "IntranetPool"
+  3. Check bindings: Get-WebBinding -Name "IntranetApp"
+  4. Check physical path exists and IIS has read permission
+  5. Check Event Viewer > Application for errors
+  6. Check IIS logs: C:\\inetpub\\logs\\LogFiles\\W3SVC*
+
+"503 Service Unavailable":
+  App pool has crashed and stopped.
+  Check Event Viewer for the crash reason.
+  Start-WebAppPool "IntranetPool"
+  If it keeps crashing: check app pool identity permissions,
+  .NET version mismatch, or application errors.
+
+"403 Forbidden":
+  File permissions. The app pool identity needs Read access to the content folder.
+  icacls "D:\\WebApps\\IntranetApp" /grant "IIS AppPool\\IntranetPool:(OI)(CI)R"
+
+"Certificate errors":
+  - Wrong cert bound? Check thumbprint matches
+  - Cert expired? Check expiry date
+  - Name mismatch? CN/SAN must match the URL
+  - Not trusted? Root CA cert must be in Trusted Root store</pre>
+
+<div class="interview-tip">Interview tip: "I set up each web application in its own app pool for isolation, running under a service account with least privilege. For HTTPS, I request certificates from our internal CA and bind them in IIS with SNI enabled so multiple HTTPS sites can share port 443. I configure IIS recycling at a fixed time during off-hours rather than the default interval to avoid recycling during business hours."</div>
+`
+    }
+  ]
 }
 ];
 
