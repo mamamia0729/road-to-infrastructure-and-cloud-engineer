@@ -1315,6 +1315,376 @@ New app onboarding pattern:
 
 <div class="interview-tip">Interview tip: "I've configured SSO for applications like Autodesk, Adobe, and Bluebeam. The process starts with adding the app from the Entra ID gallery, configuring SAML claims or OIDC consent, exchanging certificates or metadata with the vendor, verifying domains, and assigning user groups. I always test with a pilot group first and use SAML-tracer to debug any assertion issues. I also track certificate expiry dates to rotate them proactively before they break SSO."</div>
 `
+    },
+    {
+      id: 'identity-scenarios',
+      title: 'Break/Fix Scenarios - Entra ID, Sync, MFA, Conditional Access',
+      content: `
+<h4>SCENARIO 1: Azure AD Connect Sync Stopped - Users Not Syncing to Cloud</h4>
+<pre>TICKET: "New hires created in on-prem AD yesterday are not showing up in Entra ID.
+         Password changes on-prem are not reflecting in M365."
+
+ROOT CAUSE: Azure AD Connect sync service stopped after a server reboot.
+  The ADSync service didn't start automatically, or the service account
+  password expired.
+
+TROUBLESHOOT:
+  1. Check sync status in Entra admin center
+     Entra ID > Azure AD Connect > Sync Status
+     Look for: "Last sync: 3 hours ago" (should be < 30 minutes)
+
+  2. RDP to the Azure AD Connect server
+     # Check service status
+     Get-Service ADSync
+     # If stopped:
+     Start-Service ADSync
+
+  3. Check sync scheduler
+     Import-Module ADSync
+     Get-ADSyncScheduler
+     # Look for: SyncCycleEnabled = True, NextSyncCyclePolicyType
+
+  4. Force a sync
+     Start-ADSyncSyncCycle -PolicyType Delta    # Normal sync
+     Start-ADSyncSyncCycle -PolicyType Initial   # Full sync (slow, use if delta fails)
+
+  5. Check for sync errors
+     Get-ADSyncConnectorRunStatus
+     # Look at the sync log in Event Viewer > Application
+     # Source: ADSync, Directory Synchronization
+
+  6. Check the service account
+     # If password expired:
+     Get-ADUser -Identity "MSOL_xxxx" -Properties PasswordLastSet, PasswordExpired
+
+COMMON SYNC ERRORS:
+  "stopped-extension-dll-exception" = custom sync rule error
+  "stopped-server" = connectivity issue to Entra ID
+  "stopped-deletion-threshold-exceeded" = trying to delete too many objects (safety)
+    Fix: Disable-ADSyncExportDeletionThreshold (temporary), investigate why
+
+FIX: Start the ADSync service, verify the connector account has permissions,
+     and run a delta sync. Set the service to Automatic (Delayed Start).
+
+AFTER FIX:
+  - Verify new users appear in Entra ID within 30 minutes
+  - Check password sync: change a test password on-prem, verify in M365
+  - Set up monitoring alert for sync failures (Azure Monitor or SCOM)</pre>
+
+<h4>SCENARIO 2: MFA Lockout - User Lost Their Phone</h4>
+<pre>TICKET: "VP of Sales can't log into anything. Lost their phone at the airport.
+         MFA is blocking all access. URGENT."
+
+ROOT CAUSE: MFA registered to a single method (phone app). Phone is lost/stolen.
+  No backup methods registered.
+
+TROUBLESHOOT:
+  1. Verify the user's identity (call them back on a known number,
+     verify with their manager, check employee ID)
+
+  2. Option A: Temporary Access Pass (TAP) - BEST METHOD
+     Entra ID > Users > [user] > Authentication Methods
+     Click "+ Add authentication method"
+     Select: Temporary Access Pass
+     Set: Lifetime (1 hour), One-time use: Yes
+     Give the TAP code to the user over the phone
+
+     The user logs in with username + TAP code instead of MFA
+     Then they register a NEW MFA method immediately
+
+  3. Option B: Reset MFA (if TAP not available)
+     Entra ID > Users > [user] > Authentication Methods
+     Click "Require re-register multifactor authentication"
+     Next login will prompt them to set up MFA fresh
+
+  4. Option C: PowerShell
+     # Revoke all sessions (force re-auth)
+     Revoke-AzureADUserAllRefreshToken -ObjectId "user@contoso.com"
+
+     # Check registered methods
+     Get-MgUserAuthenticationMethod -UserId "user@contoso.com"
+
+  5. SECURITY: If the phone was stolen (not just lost):
+     - Revoke all sessions immediately
+     - Check sign-in logs for suspicious activity
+     - Wipe the phone via Intune if enrolled
+     - Change password as precaution
+
+PREVENT THIS:
+  - Require 2+ MFA methods during registration
+  - Push FIDO2 security keys as backup method
+  - Enable self-service password reset with multiple methods
+  - Conditional Access: Allow TAP as a temporary method
+
+AFTER FIX:
+  - User registers new phone + backup method
+  - Verify sign-in logs for any suspicious access during the gap
+  - If phone was stolen: remote wipe via Intune, file security incident</pre>
+
+<h4>SCENARIO 3: Conditional Access Policy Blocking Legitimate Users</h4>
+<pre>TICKET: "Entire Sales team can't access Salesforce since this morning.
+         Getting error AADSTS53003. They were fine yesterday."
+
+ROOT CAUSE: A new Conditional Access policy was deployed last night that
+  requires compliant devices for all cloud apps. Sales team uses personal
+  laptops that are not Intune-enrolled.
+
+TROUBLESHOOT:
+  1. Get the error code from the user
+     AADSTS53003 = "Access has been blocked by Conditional Access policies"
+
+  2. Check sign-in logs
+     Entra ID > Sign-in logs > Filter by user
+     Click the failed sign-in > Conditional Access tab
+     Shows EXACTLY which policy blocked and why
+     Look for: Policy name, Grant controls, Status = "Failure"
+
+  3. Check what changed
+     Entra ID > Audit logs > Filter: Activity = "Add conditional access policy"
+     or "Update conditional access policy"
+     WHO changed it? WHEN?
+
+  4. Identify the problem policy
+     Entra ID > Security > Conditional Access
+     Find the policy from the sign-in log
+     Check: Assignments (users/groups), Cloud apps, Conditions, Grant controls
+
+  5. Immediate fix (if policy is wrong):
+     Set policy to "Report-only" mode (stops enforcement, still logs)
+     This immediately unblocks users without deleting the policy
+
+  6. Proper fix:
+     - Exclude the Sales group until their devices are enrolled
+     - OR create a separate policy for unmanaged devices that requires
+       MFA + limited session (no download) instead of blocking
+
+COMMON CA ERRORS:
+  AADSTS50105 = User not assigned to the application
+  AADSTS53003 = Blocked by Conditional Access
+  AADSTS50076 = MFA required (user hasn't completed MFA)
+  AADSTS700016 = Application not found in tenant
+  AADSTS90094 = Admin consent required
+
+BEST PRACTICES:
+  - ALWAYS deploy new CA policies in "Report-only" mode first
+  - Test with a pilot group before "On" mode
+  - Never apply "require compliant device" without checking enrollment
+  - Create a "break glass" admin account excluded from ALL CA policies
+  - Review sign-in logs for Report-only impact before enabling
+
+AFTER FIX:
+  - Sales team can access Salesforce
+  - Policy moved to Report-only for 1 week while devices get enrolled
+  - Break glass accounts verified as excluded
+  - Change management ticket created for the policy change</pre>
+
+<h4>SCENARIO 4: Password Hash Sync Not Working - Cloud Passwords Stale</h4>
+<pre>TICKET: "Users are changing passwords on-prem but the old password still
+         works in M365. Some users have different passwords for email vs VPN."
+
+ROOT CAUSE: Password Hash Sync (PHS) agent on the Azure AD Connect server
+  failed silently. The PHS agent service crashed or the connector account
+  permissions were changed.
+
+TROUBLESHOOT:
+  1. Check PHS status
+     Import-Module ADSync
+     Get-ADSyncAADPasswordSyncConfiguration -SourceConnector "contoso.com"
+     # Look for: Enabled = True
+
+  2. Check if PHS is actually running
+     Get-ADSyncConnectorRunStatus
+     # Look for the "password sync" component
+
+  3. Check Event Viewer on the AD Connect server
+     Event Viewer > Application
+     Source: "Directory Synchronization"
+     Event ID 611 = password sync started
+     Event ID 657 = password sync completed
+     Event ID 6941 = password change event detected
+     Event ID 655 = password sync failed
+
+  4. Test password sync for a specific user
+     # Trigger password sync for one user
+     $connector = Get-ADSyncConnector -Name "contoso.com"
+     $user = Get-ADSyncCSObject -ConnectorName "contoso.com" \`
+       -DistinguishedName "CN=testuser,OU=Users,DC=contoso,DC=com"
+     # If the user's password hash is not syncing, check the connector space
+
+  5. Common fixes
+     # Restart PHS
+     Set-ADSyncAADPasswordSyncConfiguration -SourceConnector "contoso.com" \`
+       -TargetConnector "contoso.onmicrosoft.com - AAD" -Enable $false
+     Set-ADSyncAADPasswordSyncConfiguration -SourceConnector "contoso.com" \`
+       -TargetConnector "contoso.onmicrosoft.com - AAD" -Enable $true
+
+     # Force full password sync (nuclear option)
+     $adConnector = Get-ADSyncConnector -Name "contoso.com"
+     $aadConnector = Get-ADSyncConnector -Name "contoso.onmicrosoft.com - AAD"
+     Import-Module "C:\\Program Files\\Microsoft Azure AD Sync\\Bin\\ADSync\\ADSync.psd1"
+     # Triggers re-sync of ALL password hashes
+
+  6. Check connector account permissions
+     The MSOL_ account needs "Replicating Directory Changes" permission on the domain
+     # Verify:
+     dsacls "DC=contoso,DC=com" | findstr "MSOL"
+
+AFTER FIX:
+  - Change a test user's password on-prem
+  - Wait 2 minutes, try the NEW password in M365
+  - Verify old password no longer works
+  - Set up alert for Event ID 655 (password sync failure)</pre>
+
+<h4>SCENARIO 5: Group-Based Licensing - Users Not Getting M365 License</h4>
+<pre>TICKET: "5 new hires started Monday. They have M365 accounts but can't
+         access Teams, SharePoint, or email. Shows 'no license assigned.'"
+
+ROOT CAUSE: Users were added to AD but not to the licensing security group.
+  Or the tenant ran out of available licenses.
+
+TROUBLESHOOT:
+  1. Check user's license status
+     Entra ID > Users > [user] > Licenses
+     If empty: no license assigned
+
+  2. Check group-based licensing
+     Entra ID > Groups > [licensing group] > Licenses
+     Look for: "Processing" status or error icons
+
+  3. Check if user is in the group
+     # PowerShell
+     Get-MgGroupMember -GroupId "group-id" | Where-Object { $_.Id -eq "user-id" }
+
+     # Or check on-prem AD (if group syncs from on-prem)
+     Get-ADGroupMember -Identity "M365-E3-Users" | Where-Object { $_.Name -like "*newhire*" }
+
+  4. Check for licensing errors
+     Entra ID > Groups > [licensing group] > Licenses > Processing status
+     Common errors:
+       "Not enough licenses" - tenant is out of licenses, buy more
+       "Conflicting service plans" - user has a direct license AND group license
+         with conflicting services (e.g., two Exchange plans)
+       "Dependency" - a required service plan was disabled
+
+  5. Fix: Add users to the licensing group
+     # On-prem (if group syncs)
+     Add-ADGroupMember -Identity "M365-E3-Users" -Members user1,user2,user3
+     # Wait for AD Connect sync or force sync
+     Start-ADSyncSyncCycle -PolicyType Delta
+
+     # Cloud-only group
+     Add-MgGroupMember -GroupId "group-id" -DirectoryObjectId "user-id"
+
+  6. If out of licenses
+     Entra ID > Licenses > All Products > M365 E3
+     Check: Available = 0? Need to purchase more.
+     Temporary: Remove license from disabled/departed users
+     Get-MgUser -Filter "accountEnabled eq false" |
+       Get-MgUserLicenseDetail | Select-Object SkuPartNumber
+
+AFTER FIX:
+  - Wait 5-10 minutes for license processing
+  - Verify: user can open Teams, Outlook, SharePoint
+  - Set up alert when available licenses < 10
+  - Review license group membership as part of onboarding checklist</pre>
+
+<h4>SCENARIO 6: SSO Breaks After Certificate Rotation</h4>
+<pre>TICKET: "Nobody can log into Salesforce, Autodesk, or Adobe this morning.
+         Getting 'invalid SAML response' errors."
+
+ROOT CAUSE: The SAML signing certificate in Entra ID auto-rotated overnight.
+  The new certificate hasn't been uploaded to the service providers (Salesforce,
+  Autodesk, Adobe). They're rejecting the SAML assertion because it's signed
+  with an unknown certificate.
+
+TROUBLESHOOT:
+  1. Check the SAML certificate
+     Entra ID > Enterprise Applications > [app] > Single Sign-On
+     Look at: SAML Signing Certificate section
+     Is there a new "Active" certificate with today's date?
+     Is the old certificate now "Inactive"?
+
+  2. Confirm the error
+     User error typically shows: "Invalid signature", "Certificate mismatch",
+     "SAML response validation failed"
+     Use browser SAML tracer extension to capture the assertion
+
+  3. Immediate fix: Roll back the certificate
+     Entra ID > Enterprise Applications > [app] > Single Sign-On
+     Under SAML Signing Certificate:
+     Click the OLD certificate > Make Active
+     This immediately restores SSO (users can log in again)
+
+  4. Proper fix: Update the new certificate in each app
+     Download the NEW certificate from Entra ID (Base64 format)
+     Log into each service provider's admin console:
+       Salesforce: Setup > Identity > Single Sign-On Settings > Update cert
+       Autodesk: admin.autodesk.com > SSO > Upload new IdP certificate
+       Adobe: adminconsole.adobe.com > Settings > Identity > Update cert
+     Then make the new certificate Active in Entra ID
+
+  5. Prevent this: Set up certificate expiry notifications
+     Entra ID > Enterprise Applications > [app] > Single Sign-On
+     Notification email: set to IT team DL
+     Set calendar reminders 60/30/7 days before expiry
+
+AFTER FIX:
+  - Test SSO login for each affected application
+  - Verify SAML assertion is signed with the correct certificate
+  - Document all SSO-enabled apps and their certificate expiry dates
+  - Create a shared calendar with certificate rotation reminders
+  - Consider OIDC (certificate-less) for future app integrations</pre>
+
+<h4>SCENARIO 7: Hybrid Exchange - On-Prem User Can't Email Cloud User</h4>
+<pre>TICKET: "John (on-prem mailbox) can't email Sarah (migrated to Exchange Online).
+         Gets NDR: 'The email address you entered couldn't be found.'"
+
+ROOT CAUSE: When Sarah was migrated to Exchange Online, the on-prem mailbox
+  was converted to a RemoteMailbox (mail-enabled user) but the targetAddress
+  attribute wasn't set correctly. Or the migration completed but AD Connect
+  hasn't synced the updated mail routing attributes.
+
+TROUBLESHOOT:
+  1. Check Sarah's on-prem object
+     # On the Exchange server (on-prem)
+     Get-RemoteMailbox sarah@contoso.com | Select-Object \`
+       PrimarySmtpAddress, RemoteRoutingAddress, RecipientTypeDetails
+
+     # Should show:
+     #   RecipientTypeDetails: RemoteUserMailbox
+     #   RemoteRoutingAddress: sarah@contoso.mail.onmicrosoft.com
+
+  2. If RemoteRoutingAddress is missing/wrong
+     Set-RemoteMailbox sarah@contoso.com \`
+       -RemoteRoutingAddress sarah@contoso.mail.onmicrosoft.com
+
+  3. Check AD Connect sync
+     Start-ADSyncSyncCycle -PolicyType Delta
+     # Wait 2-3 minutes, check Sarah in Entra ID
+
+  4. Check mail flow in Exchange Online
+     # Connect to Exchange Online
+     Connect-ExchangeOnline
+     Get-Mailbox sarah@contoso.com | Select-Object \`
+       PrimarySmtpAddress, RecipientTypeDetails
+
+     # Should show: RecipientTypeDetails: UserMailbox
+
+  5. Check the hybrid mail flow connector
+     Get-InboundConnector | Select-Object Name, ConnectorType, Enabled
+     Get-OutboundConnector | Select-Object Name, ConnectorType, Enabled
+     # Both should show Enabled = True
+
+  6. Test mail flow
+     # From Exchange Online
+     Test-Message -Sender john@contoso.com -Recipients sarah@contoso.com
+
+AFTER FIX:
+  - John can email Sarah and vice versa
+  - Check all migrated users have correct RemoteRoutingAddress
+  - Run: Get-RemoteMailbox | Where-Object { -not $_.RemoteRoutingAddress }
+  - Fix any users missing the routing address before they experience issues</pre>
+`
     }
   ]
 },
@@ -1550,6 +1920,263 @@ Solution:
   - Monthly report of inactive Teams</pre>
 
 <div class="interview-tip">Interview tip: "I manage Teams governance through M365 group policies - expiration, naming conventions, and restricting creation to department leads. This prevents sprawl while still letting teams collaborate. For security, I use CA policies to require MFA for guest access and block unmanaged devices from downloading files."</div>
+`
+    },
+    {
+      id: 'm365-scenarios',
+      title: 'Break/Fix Scenarios - Mail Flow, Licensing, Teams, SharePoint',
+      content: `
+<h4>SCENARIO 1: Email Not Delivering - NDR "550 5.7.1 Message Rejected"</h4>
+<pre>TICKET: "External clients aren't receiving our emails. They're getting
+         bounce-backs. Some go through, some don't. Started yesterday."
+
+ROOT CAUSE: Your mail server IP was added to a public blocklist (Spamhaus,
+  Barracuda, etc.) because a compromised account sent spam. Or your SPF/DKIM/DMARC
+  records are misconfigured after a DNS change.
+
+TROUBLESHOOT:
+  1. Check the NDR details
+     The bounce message contains the reason:
+     "550 5.7.1" = blocked by recipient's server (reputation/policy)
+     "550 5.1.1" = recipient address doesn't exist
+     "452 4.5.3" = recipient mailbox full
+
+  2. Check message trace in Exchange Online
+     Exchange Admin Center > Mail Flow > Message Trace
+     Search by sender, recipient, and date
+     Look at: Status, Detail (shows the remote server's rejection reason)
+
+     # PowerShell
+     Connect-ExchangeOnline
+     Get-MessageTrace -SenderAddress user@contoso.com \`
+       -StartDate (Get-Date).AddDays(-2) -EndDate (Get-Date) |
+       Where-Object Status -eq "Failed" |
+       Select-Object Received, SenderAddress, RecipientAddress, Status, Detail
+
+  3. Check if your domain/IP is blocklisted
+     # Check MX Toolbox or use PowerShell
+     # Go to mxtoolbox.com/blacklists - enter your sending IP
+     # Common lists: Spamhaus, Barracuda, SORBS, CBL
+
+  4. Check SPF record
+     Resolve-DnsName -Name contoso.com -Type TXT | Where-Object Strings -like "*spf*"
+     # Should include: include:spf.protection.outlook.com
+     # If missing, emails from M365 fail SPF checks
+
+  5. Check DKIM
+     Exchange Admin Center > Email Authentication > DKIM
+     Verify: DKIM signing is enabled for your domain
+     Check DNS: selector1._domainkey.contoso.com and selector2._domainkey.contoso.com
+
+  6. Check DMARC
+     Resolve-DnsName -Name _dmarc.contoso.com -Type TXT
+     # Should show: v=DMARC1; p=quarantine (or reject); rua=mailto:...
+
+  7. Check for compromised account (if blocklisted)
+     Entra ID > Sign-in logs > Filter: Application = "SMTP"
+     Look for: unusual locations, impossible travel, mass sending
+     # Block the account immediately
+     Set-MgUser -UserId "compromised@contoso.com" -AccountEnabled:$false
+     Revoke-MgUserSignInSession -UserId "compromised@contoso.com"
+
+FIX:
+  - Submit delisting request to each blocklist (usually self-service)
+  - Fix SPF/DKIM/DMARC records
+  - Disable compromised account, reset password, require MFA
+  - Review outbound spam policies in Exchange Online
+
+AFTER FIX:
+  - Monitor message trace for delivery success
+  - Set up alerts for high-volume outbound email (sign of compromise)
+  - Check blocklist status daily until cleared (24-48 hours typically)</pre>
+
+<h4>SCENARIO 2: Shared Mailbox Can't Send - "You Don't Have Permission"</h4>
+<pre>TICKET: "The HR shared mailbox (hr@contoso.com) stopped letting our team
+         send emails as HR. They get 'you don't have permission to send
+         on behalf of this user.'"
+
+ROOT CAUSE: Send As or Send on Behalf permissions were removed. This happens
+  when someone modifies the mailbox permissions, or when the user was removed
+  and re-added to the group.
+
+TROUBLESHOOT:
+  1. Check current permissions
+     Connect-ExchangeOnline
+
+     # Check Send As
+     Get-RecipientPermission -Identity hr@contoso.com |
+       Select-Object Trustee, AccessRights
+
+     # Check Send on Behalf
+     Get-Mailbox hr@contoso.com | Select-Object GrantSendOnBehalfTo
+
+     # Check Full Access (needed to open the mailbox)
+     Get-MailboxPermission -Identity hr@contoso.com |
+       Where-Object { $_.AccessRights -like "*FullAccess*" -and $_.User -ne "NT AUTHORITY*" }
+
+  2. Grant missing permissions
+     # Send As (email shows "from: hr@contoso.com" - no "on behalf of")
+     Add-RecipientPermission -Identity hr@contoso.com \`
+       -Trustee "HR-Team-Group" -AccessRights SendAs -Confirm:$false
+
+     # Send on Behalf (email shows "User on behalf of hr@contoso.com")
+     Set-Mailbox hr@contoso.com -GrantSendOnBehalfTo "HR-Team-Group"
+
+     # Full Access (auto-maps mailbox in Outlook)
+     Add-MailboxPermission -Identity hr@contoso.com \`
+       -User "HR-Team-Group" -AccessRights FullAccess -AutoMapping $true
+
+  3. Wait 15-60 minutes for permissions to propagate
+     User may need to restart Outlook
+
+COMMON SHARED MAILBOX ISSUES:
+  - "Mailbox is full" - Shared mailboxes have 50GB limit (no license)
+    Assign an Exchange Online Plan 2 license for 100GB + archive
+  - "Can't auto-map" - Re-add Full Access permission with AutoMapping $true
+  - "Shows in Sent Items of user, not shared mailbox"
+    Fix: Set-Mailbox hr@contoso.com -MessageCopyForSentAsEnabled $true
+
+AFTER FIX:
+  - Team members can send as HR
+  - Sent items appear in the shared mailbox
+  - Document the permission model for the shared mailbox</pre>
+
+<h4>SCENARIO 3: SharePoint "Access Denied" Despite Being in the Group</h4>
+<pre>TICKET: "A user was added to the Marketing M365 group but still can't
+         access the Marketing SharePoint site. Gets Access Denied."
+
+ROOT CAUSE: The SharePoint site permissions were changed from using the
+  M365 group to custom permissions. Or the user's access is cached and
+  stale. Or the site has unique permissions on a specific library/folder.
+
+TROUBLESHOOT:
+  1. Check site permissions
+     SharePoint Admin Center > Sites > Active Sites > [Marketing site]
+     Click: Membership > check Site owners, Site members, Site visitors
+     Or: Go to the site > Gear icon > Site Permissions
+
+  2. Check if the M365 group is connected
+     # PowerShell
+     Connect-SPOService -Url https://contoso-admin.sharepoint.com
+     Get-SPOSite -Identity https://contoso.sharepoint.com/sites/marketing |
+       Select-Object GroupId
+     # If GroupId is empty/null, the site isn't group-connected
+
+  3. Check inheritance
+     The specific library or folder may have broken inheritance
+     Go to the library > Library Settings > Permissions for this document library
+     "This library has unique permissions" = inheritance broken
+
+  4. Check for conditional access blocking
+     Entra ID > Sign-in logs > filter by user + application "SharePoint Online"
+     If CA policy is blocking, you'll see it here
+
+  5. Fix: Re-add user or fix permissions
+     # If M365 group is still connected:
+     Add-UnifiedGroupLinks -Identity "Marketing" \`
+       -LinkType Members -Links "user@contoso.com"
+
+     # If site uses custom SharePoint permissions:
+     # Via SharePoint admin or the site's Permissions page
+     # Add user to Site Members group
+
+  6. Clear access cache
+     User: Log out of M365, clear browser cache, log back in
+     Admin: Sometimes takes up to 24 hours for group membership to reflect
+
+AFTER FIX:
+  - User can access the Marketing SharePoint site
+  - Check if other sites have the same broken permission inheritance
+  - Document which sites use M365 group vs custom permissions</pre>
+
+<h4>SCENARIO 4: Teams Meeting - "Call Dropped" / Poor Quality</h4>
+<pre>TICKET: "Executives complaining about Teams calls dropping, audio cutting out,
+         video freezing. Only happens in the conference rooms."
+
+ROOT CAUSE: Network issue - conference room devices are on a WiFi network
+  that's saturated, or QoS is not configured so Teams traffic competes
+  with regular internet traffic.
+
+TROUBLESHOOT:
+  1. Check Teams call quality
+     Teams Admin Center > Analytics & Reports > Call Quality Dashboard (CQD)
+     Filter by: Date range, location, or specific users
+     Look for: Poor stream rate, packet loss > 5%, jitter > 30ms, latency > 100ms
+
+  2. Check network from the conference room
+     # From the room device or a laptop in the room:
+     Test-NetConnection -ComputerName teams.microsoft.com -Port 443
+     # Latency above 100ms = problem
+
+     # Check bandwidth
+     # Run Microsoft's network assessment tool:
+     # https://connectivity.office.com (Network Connectivity Test)
+
+  3. Common fixes
+     QoS: Mark Teams audio/video traffic as priority
+       Group Policy: Computer Config > Policies > Windows Settings >
+         Policy-based QoS > New Policy
+         Audio: DSCP 46, ports 50000-50019
+         Video: DSCP 34, ports 50020-50039
+         Sharing: DSCP 18, ports 50040-50059
+
+     WiFi: Move conference room devices to wired ethernet
+     Bandwidth: Ensure at least 1.5 Mbps per video call participant
+     Split tunnel VPN: Teams traffic should NOT go through VPN
+
+  4. Check Teams-specific settings
+     Teams Admin Center > Meetings > Meeting Policies
+     Video: HD enabled? Bandwidth limits set too low?
+
+  5. Firewall/proxy
+     Teams needs direct UDP connectivity (not proxied)
+     Required: UDP 3478-3481 to Microsoft relay servers
+     If UDP is blocked: Teams falls back to TCP (worse quality)
+
+AFTER FIX:
+  - Monitor CQD for improved call quality metrics
+  - Wire all conference rooms if on WiFi
+  - Configure QoS on network switches and group policy
+  - Set up CQD alerts for poor quality spikes</pre>
+
+<h4>SCENARIO 5: OneDrive "You're Out of Storage" But Files Are Deleted</h4>
+<pre>TICKET: "User deleted 20GB of files from OneDrive but still shows full.
+         Can't sync new files. Says 95% used."
+
+ROOT CAUSE: Deleted files go to the OneDrive recycle bin and still count
+  against the quota. The recycle bin keeps files for 93 days. Or the user
+  has version history keeping old copies of large files.
+
+TROUBLESHOOT:
+  1. Check OneDrive storage usage
+     # SharePoint Online Management Shell
+     Connect-SPOService -Url https://contoso-admin.sharepoint.com
+     Get-SPOSite -Identity https://contoso-my.sharepoint.com/personal/user_contoso_com |
+       Select-Object StorageUsageCurrent, StorageQuota
+
+  2. Check recycle bin
+     User: Go to OneDrive > Recycle Bin > "Empty recycle bin"
+     WARNING: This permanently deletes files (still recoverable from
+     second-stage recycle bin for 93 days by admin)
+
+  3. Check version history
+     OneDrive > File > Right-click > Version History
+     Large files with many versions consume lots of space
+     Consider: Reduce version limit from 500 (default) to 50 or 100
+
+     # Admin: Set version limit for the tenant
+     Set-SPOTenant -OneDriveStorageQuota 5242880  # 5TB in MB
+     # Per-site version settings in SharePoint admin
+
+  4. Increase quota if needed
+     Set-SPOSite -Identity https://contoso-my.sharepoint.com/personal/user_contoso_com \`
+       -StorageQuota 5242880   # 5TB in MB
+
+AFTER FIX:
+  - User's OneDrive shows reduced usage after emptying recycle bin
+  - OneDrive sync resumes
+  - Consider setting a tenant-wide version history policy
+  - Educate users: recycle bin still counts against storage</pre>
 `
     }
   ]
@@ -3716,6 +4343,517 @@ COMMON POST-MIGRATION ISSUES:
   - Cached credentials (user laptop was offline during migration -> credential conflict)</pre>
 
 <div class="interview-tip">Interview tip: "For 300+ workstations, I'd use Quest Migration Manager with a wave approach. Wave 0 is IT staff - they're our test group and can troubleshoot their own issues. Each subsequent wave is a department, with the migration running after hours and desktop support on the floor the next morning. The key is profile preservation - Quest handles the profile SID mapping so users don't lose their desktop, documents, or application settings."</div>
+`
+    },
+    {
+      id: 'adm-scenarios',
+      title: 'Break/Fix Scenarios - Migration Failures, Coexistence, SID History, Kerberos',
+      content: `
+<h4>SCENARIO 1: SID History Not Working - User Can't Access Old File Shares</h4>
+<pre>TICKET: "Migrated users in Wave 2 can't access file shares on the old domain.
+         Getting Access Denied. Wave 1 users are fine."
+
+ROOT CAUSE: SID filtering is enabled on the trust between domains. The target
+  domain is stripping out the SID history from the Kerberos ticket, so the old
+  SIDs aren't being presented to the resource server.
+
+TROUBLESHOOT:
+  1. Verify SID history was migrated
+     Get-ADUser -Identity jdoe -Properties SIDHistory -Server CONTOSO.com
+     # Should show: SIDHistory = {S-1-5-21-xxxxx (old domain SID)}
+     # If empty: migration didn't include SID history
+
+  2. Check trust settings for SID filtering
+     # On the TARGET domain (CONTOSO):
+     netdom trust CONTOSO.com /domain:CORP.contoso.com /quarantine
+     # If it says "SID filtering is enabled" - that's the problem
+
+     # Disable SID filtering (allow SID history across the trust):
+     netdom trust CONTOSO.com /domain:CORP.contoso.com /quarantine:No
+
+     # For SELECTIVE authentication trusts, you also need:
+     netdom trust CONTOSO.com /domain:CORP.contoso.com /enableSIDHistory:Yes
+
+  3. If SID history wasn't migrated at all
+     # ADMT requires these prerequisites:
+     # - TcpipClientSupport = 1 on source PDC Emulator
+     # - Auditing enabled on both domains
+     # - Trust allows SID history
+     # Re-run migration for affected users with SID history option:
+     admt user /N "user1" "user2" /SD:CORP /TD:CONTOSO \`
+       /MSS:YES   # Migrate SID History = YES
+
+  4. Verify the token
+     # On the client, check the Kerberos ticket includes SID history:
+     whoami /groups
+     # Look for the old domain SID in the group list
+     # If missing: SID filtering is stripping it
+
+IMPORTANT CONTEXT:
+  SID filtering is a SECURITY FEATURE. It prevents attacks where a
+  compromised domain adds fake SIDs to gain access to trusted resources.
+  Disabling it has security implications. Only disable during migration,
+  re-enable after old domain is decommissioned.
+
+AFTER FIX:
+  - Users can access old domain file shares with their new accounts
+  - Verify: dir \\\\CORP-FS01\\finance (should work with CONTOSO credentials)
+  - Document: SID filtering status and plan to re-enable post-migration
+  - Test: Access to SQL, SharePoint, and other SID-dependent resources</pre>
+
+<h4>SCENARIO 2: Service Account Breaks After Migration - SPN Errors</h4>
+<pre>TICKET: "SQL Server on APP-SQL01 stopped accepting Kerberos authentication
+         after we migrated the service account to CONTOSO domain.
+         Users get 'Cannot generate SSPI context' errors."
+
+ROOT CAUSE: The Service Principal Name (SPN) is registered on the old domain
+  account. The new CONTOSO service account doesn't have the SPN registered.
+  Kerberos relies on SPNs to find the service - no SPN = no Kerberos = NTLM
+  fallback or failure.
+
+TROUBLESHOOT:
+  1. Check what SPNs exist for the old account
+     setspn -L CORP\\svc_sql
+     # Shows: MSSQLSvc/APP-SQL01.corp.contoso.com:1433
+     #        MSSQLSvc/APP-SQL01.corp.contoso.com
+
+  2. Check the new account
+     setspn -L CONTOSO\\svc_sql
+     # Shows: (empty) - NO SPNs registered
+
+  3. Check for duplicate SPNs (critical - duplicates break Kerberos)
+     setspn -X -F   # Forest-wide duplicate check
+     # If the SPN exists on BOTH accounts, Kerberos fails completely
+
+  4. Remove SPN from old account (if it still exists)
+     setspn -D MSSQLSvc/APP-SQL01.corp.contoso.com:1433 CORP\\svc_sql
+     setspn -D MSSQLSvc/APP-SQL01.corp.contoso.com CORP\\svc_sql
+
+  5. Register SPN on new account
+     setspn -S MSSQLSvc/APP-SQL01.contoso.com:1433 CONTOSO\\svc_sql
+     setspn -S MSSQLSvc/APP-SQL01.contoso.com CONTOSO\\svc_sql
+     # -S = safe set (checks for duplicates first)
+
+  6. If SQL Server was using the old hostname:
+     # Also register with old hostname for transition
+     setspn -S MSSQLSvc/APP-SQL01.corp.contoso.com:1433 CONTOSO\\svc_sql
+
+  7. Update SQL Server service to run as new account
+     SQL Server Configuration Manager > SQL Server Services
+     Right-click SQL Server > Properties > Log On tab
+     Change to: CONTOSO\\svc_sql
+
+  8. Restart SQL Server service
+     Restart-Service MSSQLSERVER
+
+  9. Verify Kerberos is working
+     # From a client, connect to SQL and check auth type:
+     SELECT auth_scheme FROM sys.dm_exec_connections WHERE session_id = @@SPID
+     # Should return: "KERBEROS" (not "NTLM")
+
+AFTER FIX:
+  - Users can connect to SQL Server with Kerberos authentication
+  - Run: setspn -L CONTOSO\\svc_sql to verify all SPNs
+  - Document all migrated service accounts and their SPNs
+  - Update the SPN inventory spreadsheet</pre>
+
+<h4>SCENARIO 3: Computer Trust Relationship Broken After Migration</h4>
+<pre>TICKET: "User logs into their PC and gets: 'The trust relationship between
+         this workstation and the primary domain has failed.' Can't log in."
+
+ROOT CAUSE: The computer's secure channel with the domain controller is broken.
+  This happens when: computer account password is out of sync (>30 days offline),
+  computer was migrated but not rebooted, or the computer account was reset in AD.
+
+TROUBLESHOOT:
+  1. Log in with a LOCAL admin account
+     Use: .\\Administrator or COMPUTERNAME\\Administrator
+     (Domain login won't work - that's the whole problem)
+
+  2. Verify the issue
+     # From PowerShell as local admin:
+     Test-ComputerSecureChannel
+     # Returns: False (confirms broken trust)
+
+  3. Fix Option A: Reset the secure channel (preferred, no reboot needed)
+     Test-ComputerSecureChannel -Repair -Credential (Get-Credential)
+     # Enter domain admin credentials when prompted
+     # Returns: True (trust restored)
+
+  4. Fix Option B: Remove and re-join (if repair fails)
+     # Remove from domain (joins workgroup)
+     Remove-Computer -UnjoinDomainCredential (Get-Credential) -Force -Restart
+
+     # After reboot, join domain again
+     Add-Computer -DomainName contoso.com -Credential (Get-Credential) -Restart
+
+  5. Fix Option C: Reset computer account in AD + rejoin
+     # On the DC:
+     Reset-ComputerMachinePassword -Server CONTOSO-DC01 -Credential (Get-Credential)
+     # On the workstation: reboot
+
+MIGRATION CONTEXT:
+  After Quest/ADMT migrates a computer:
+  - The computer is joined to the new domain
+  - It gets a new computer account in CONTOSO
+  - Old cached credentials may cause confusion
+  - User must log in with CONTOSO\\username (not CORP\\username)
+  - If migration was interrupted, the computer may be in a half-migrated state
+
+PREVENT THIS:
+  - Always reboot immediately after computer migration
+  - Verify domain join: (Get-WmiObject Win32_ComputerSystem).Domain
+  - Have local admin password available (LAPS or documented)
+
+AFTER FIX:
+  - User can log in with CONTOSO domain credentials
+  - Verify: (Get-WmiObject Win32_ComputerSystem).Domain shows "contoso.com"
+  - Test: Access to file shares, printers, applications
+  - Check: GPOs are applying (gpresult /r)</pre>
+
+<h4>SCENARIO 4: DNS Split-Brain During Migration - Inconsistent Resolution</h4>
+<pre>TICKET: "Some users can reach the intranet, some can't. Some get the old
+         server, some get the new one. It's different depending on which
+         floor they're on. Complete chaos."
+
+ROOT CAUSE: During migration, DNS zones exist in BOTH domains with different
+  records. Depending on which DC a user's machine is pointed to for DNS,
+  they get different answers. Floor 2 uses CORP DNS servers, Floor 3 was
+  migrated to CONTOSO DNS servers.
+
+TROUBLESHOOT:
+  1. Check what DNS server each machine is using
+     # On the problematic machine:
+     ipconfig /all | findstr "DNS Servers"
+     # CORP machine: 10.0.1.10 (CORP-DC01)
+     # CONTOSO machine: 10.0.2.10 (CONTOSO-DC01)
+
+  2. Compare DNS records in both domains
+     # Check the same record on both DNS servers:
+     Resolve-DnsName -Name intranet.contoso.com -Server 10.0.1.10  # CORP DNS
+     Resolve-DnsName -Name intranet.contoso.com -Server 10.0.2.10  # CONTOSO DNS
+     # If they return different IPs, that's your split-brain
+
+  3. Fix: Ensure DNS consistency
+     # Option A: Set up conditional forwarders both ways
+     # On CORP DNS servers - forward contoso.com queries to CONTOSO:
+     Add-DnsServerConditionalForwarderZone -Name "contoso.com" \`
+       -MasterServers 10.0.2.10,10.0.2.11 -ComputerName CORP-DC01
+
+     # On CONTOSO DNS servers - forward corp.contoso.com to CORP:
+     Add-DnsServerConditionalForwarderZone -Name "corp.contoso.com" \`
+       -MasterServers 10.0.1.10,10.0.1.11 -ComputerName CONTOSO-DC01
+
+     # Option B: Create stub zones
+     Add-DnsServerStubZone -Name "contoso.com" \`
+       -MasterServers 10.0.2.10 -ComputerName CORP-DC01
+
+  4. For the intranet specifically, use a CNAME or update A records
+     # Make both DNS servers point to the same IP:
+     # On CORP DNS:
+     Set-DnsServerResourceRecord -ZoneName "contoso.com" \`
+       -OldInputObject (Get-DnsServerResourceRecord -ZoneName "contoso.com" -Name "intranet") \`
+       -NewInputObject $newRecord -ComputerName CORP-DC01
+
+  5. Long-term fix: Migrate all clients to CONTOSO DNS
+     # Via DHCP scope options update:
+     Set-DhcpServerv4OptionValue -ScopeId 10.0.1.0 \`
+       -DnsServer 10.0.2.10,10.0.2.11 \`
+       -DnsDomain contoso.com
+
+AFTER FIX:
+  - All users resolve the same IP for intranet.contoso.com
+  - ipconfig /flushdns on affected clients (or wait for TTL)
+  - Document which subnets use which DNS servers
+  - Create a DNS migration tracking spreadsheet</pre>
+
+<h4>SCENARIO 5: Application Breaks Post-Migration - LDAP Bind Failure</h4>
+<pre>TICKET: "The ERP system, badge access, and time tracking apps can't
+         authenticate users after domain migration. All use LDAP against
+         the old domain controllers."
+
+ROOT CAUSE: Applications have hardcoded LDAP connection strings pointing to
+  old CORP domain controllers. The Base DN, service account, and server address
+  all need to change.
+
+TROUBLESHOOT:
+  1. Identify which apps use LDAP
+     # Check connections to old DCs on LDAP port:
+     Invoke-Command -ComputerName CORP-DC01 -ScriptBlock {
+       Get-NetTCPConnection -LocalPort 389 -State Established |
+         Select-Object RemoteAddress, @{N='Process';E={(Get-Process -Id $_.OwningProcess).Name}}
+     }
+
+  2. Build an inventory
+     App Name | Server | Config Location | Old DC | Old Base DN | Service Account
+
+  3. Test LDAP bind to new domain
+     $cred = Get-Credential CONTOSO\\svc_erp
+     try {
+       $de = New-Object System.DirectoryServices.DirectoryEntry(
+         "LDAP://CONTOSO-DC01.contoso.com:389/DC=contoso,DC=com",
+         $cred.UserName, $cred.GetNetworkCredential().Password)
+       $searcher = New-Object System.DirectoryServices.DirectorySearcher($de)
+       $searcher.Filter = "(sAMAccountName=testuser)"
+       $result = $searcher.FindOne()
+       if ($result) { "LDAP bind SUCCESS" } else { "User not found" }
+     } catch { "LDAP FAILED: $($_.Exception.Message)" }
+
+  4. Update each application's config
+     # Common config file patterns:
+     # XML: <ldapServer>CORP-DC01</ldapServer> -> <ldapServer>CONTOSO-DC01.contoso.com</ldapServer>
+     # JSON: "BaseDN": "DC=corp,DC=contoso,DC=com" -> "DC=contoso,DC=com"
+     # INI: LDAPHost=CORP-DC01 -> LDAPHost=CONTOSO-DC01.contoso.com
+
+  5. Check service account in new domain
+     Get-ADUser -Identity svc_erp -Server CONTOSO.com \`
+       -Properties Enabled, LockedOut, PasswordExpired |
+       Select-Object Name, Enabled, LockedOut, PasswordExpired
+
+  6. If apps can't be immediately reconfigured
+     # Create DNS CNAME so old DC name resolves to new DC:
+     Add-DnsServerResourceRecordCName -Name "CORP-DC01" \`
+       -HostNameAlias "CONTOSO-DC01.contoso.com" -ZoneName "corp.contoso.com"
+     # This buys time while vendors reconfigure apps
+
+AFTER FIX:
+  - Each application authenticates against CONTOSO domain
+  - Test with multiple users per application
+  - Update app documentation with new LDAP settings
+  - Only decommission old DCs after ALL apps are migrated</pre>
+
+<h4>SCENARIO 6: Exchange Hybrid - Free/Busy Lookup Fails Between Forests</h4>
+<pre>TICKET: "Users in the old CORP forest can't see calendar availability for
+         users migrated to Exchange Online. Shows 'no information available'
+         when scheduling meetings."
+
+ROOT CAUSE: The OAuth certificate between on-prem Exchange and Exchange Online
+  has expired. Or the Autodiscover DNS records are pointing to the wrong place
+  after domain migration. Or the Organization Relationship (free/busy sharing)
+  was not configured for the migration.
+
+TROUBLESHOOT:
+  1. Test from on-prem Exchange
+     # On the on-prem Exchange server:
+     Test-OAuthConnectivity -Service EWS \`
+       -TargetUri https://outlook.office365.com/ews/exchange.asmx \`
+       -Mailbox corpuser@corp.contoso.com
+     # If this fails: OAuth is broken
+
+  2. Check Organization Relationship
+     Get-OrganizationRelationship | Select-Object Name, DomainNames, \`
+       FreeBusyAccessEnabled, FreeBusyAccessLevel, TargetOwaURL
+     # Should show: FreeBusyAccessEnabled = True
+
+  3. Check Autodiscover
+     # From an on-prem client, check where Autodiscover points:
+     Resolve-DnsName -Name autodiscover.contoso.com -Type CNAME
+     # For hybrid: should point to autodiscover.outlook.com for migrated users
+     # Or: SCP in AD should have the on-prem URL
+
+  4. Check the OAuth certificate
+     Get-AuthServer | Select-Object Name, Enabled, IssuerIdentifier
+     Get-PartnerApplication | Select-Object Name, Enabled
+
+     # If OAuth cert expired, re-run the Hybrid Configuration Wizard (HCW)
+     # This regenerates the OAuth relationship
+
+  5. Quick fix: Re-run HCW
+     Download latest HCW from https://aka.ms/HybridWizard
+     Run through the wizard - it fixes:
+       - OAuth certificates
+       - Organization relationships
+       - Send/receive connectors
+       - Autodiscover configuration
+
+AFTER FIX:
+  - CORP users can see free/busy for Exchange Online users
+  - Exchange Online users can see free/busy for CORP on-prem users
+  - Test scheduling a meeting that spans both environments
+  - Set calendar reminder for next OAuth certificate renewal</pre>
+
+<h4>SCENARIO 7: User Profile Issues After Domain Migration</h4>
+<pre>TICKET: "After migrating to the new domain, users are getting a temporary
+         profile. Their desktop, documents, and browser bookmarks are gone."
+
+ROOT CAUSE: Windows creates a new profile because the SID changed. The old
+  profile is tied to the CORP\\user SID. The new CONTOSO\\user has a different
+  SID. If Quest/ADMT didn't remap the profile SID, Windows sees the new login
+  as a brand new user.
+
+TROUBLESHOOT:
+  1. Check if old profile exists
+     dir "C:\\Users"
+     # You'll see: jdoe (old profile), jdoe.CONTOSO (new temp profile)
+     # or: jdoe, TEMP (really bad - temp profile)
+
+  2. Check the profile SID mapping in registry
+     # Old profile SID:
+     Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\*" |
+       Where-Object { $_.ProfileImagePath -like "*jdoe*" } |
+       Select-Object PSChildName, ProfileImagePath
+
+     # You'll see two entries:
+     # S-1-5-21-OLD... -> C:\\Users\\jdoe (old, correct profile)
+     # S-1-5-21-NEW... -> C:\\Users\\jdoe.CONTOSO (new, empty)
+
+  3. Fix: Remap the profile (manual method)
+     # CAUTION: Registry edit. Back up first.
+     # Delete the NEW SID entry (S-1-5-21-NEW...) from ProfileList
+     # Edit the OLD SID entry and change its SID key to the NEW SID
+     # This makes the new domain login point to the old profile folder
+
+     # Safer: Use Quest Migration Manager's profile migration
+     # Or: Use ForensIT User Profile Wizard (free tool)
+     # It remaps profile permissions from old SID to new SID
+
+  4. If using Quest Migration Manager
+     # Quest should handle this automatically during workstation migration
+     # If it didn't:
+     # Re-run the Quest Desktop Agent on the workstation
+     # It re-maps the profile SID and NTFS permissions
+
+  5. Check NTFS permissions on the profile folder
+     icacls "C:\\Users\\jdoe"
+     # Should show CONTOSO\\jdoe with Full Control
+     # If only CORP\\jdoe: permissions need remapping
+     icacls "C:\\Users\\jdoe" /grant "CONTOSO\\jdoe:(OI)(CI)F"
+
+PREVENT THIS:
+  - Always run Quest Desktop Agent / profile migration BEFORE user's first login
+  - Test profile migration in Wave 0 (IT staff)
+  - Have desktop support on the floor morning after migration
+  - Document the profile fix procedure for helpdesk
+
+AFTER FIX:
+  - User logs in with CONTOSO\\jdoe and sees their old desktop, documents, bookmarks
+  - Outlook profile connects to their mailbox
+  - Mapped drives and printers work
+  - Browser favorites and cached credentials are intact</pre>
+
+<h4>SCENARIO 8: Drive Mappings and Printers Missing After Migration</h4>
+<pre>TICKET: "After the domain migration, users don't have their F: drive
+         or their department printer. Help desk is getting flooded."
+
+ROOT CAUSE: Drive mappings and printers were deployed via GPO in the CORP
+  domain. After migration to CONTOSO, those GPOs no longer apply. New GPOs
+  need to be created in CONTOSO, or login scripts need to be updated.
+
+TROUBLESHOOT:
+  1. Check what GPOs applied before migration
+     # From a user's machine (still getting old GPOs if not fully migrated):
+     gpresult /r /scope user
+     # Look for: Drive Maps, Printer Connections in "Applied GPOs"
+
+  2. Check the old domain GPOs for drive/printer mappings
+     # On CORP domain:
+     Get-GPO -All -Domain CORP.contoso.com | ForEach-Object {
+       [xml]$report = Get-GPOReport -Guid $_.Id -ReportType Xml
+       if ($report.InnerXml -match "DriveMapSettings|PrinterConnection") {
+         [PSCustomObject]@{
+           GPO = $_.DisplayName
+           HasDrives = $report.InnerXml -match "DriveMapSettings"
+           HasPrinters = $report.InnerXml -match "PrinterConnection"
+         }
+       }
+     } | Format-Table
+
+  3. Create equivalent GPOs in CONTOSO domain
+     # In GPMC on CONTOSO domain:
+     # User Config > Preferences > Windows Settings > Drive Maps
+     # New Drive Map:
+     #   Action: Replace
+     #   Location: \\\\CONTOSO-FS01\\Finance  (or same server if file server not migrated)
+     #   Drive Letter: F:
+     #   Item-level targeting: CONTOSO\\Finance-Users security group
+
+     # Printers:
+     # User Config > Preferences > Control Panel Settings > Printers
+     # New Shared Printer:
+     #   Path: \\\\CONTOSO-PS01\\Finance-HP-Floor2
+     #   Action: Create
+     #   Set as default: optional
+
+  4. Quick fix during transition: DNS CNAME aliases
+     # If file server hasn't migrated yet, create aliases:
+     Add-DnsServerResourceRecordCName -Name "CORP-FS01" \`
+       -HostNameAlias "CORP-FS01.corp.contoso.com" \`
+       -ZoneName "contoso.com"
+     # Now \\\\CORP-FS01\\Finance works from CONTOSO-joined machines
+
+  5. Quick fix: Login script (temporary)
+     # Deploy via GPO in CONTOSO domain:
+     New-PSDrive -Name "F" -PSProvider FileSystem \`
+       -Root "\\\\CORP-FS01\\Finance" -Persist -ErrorAction SilentlyContinue
+     Add-Printer -ConnectionName "\\\\CORP-PS01\\Finance-HP" -ErrorAction SilentlyContinue
+
+  6. Force GPO update
+     gpupdate /force
+     # User may need to log off and back on for drive maps
+
+AFTER FIX:
+  - Users see F: drive and department printer after login
+  - Verify: net use (shows mapped drives)
+  - Verify: Get-Printer (shows mapped printers)
+  - Update the migration runbook with GPO recreation steps
+  - Plan file server migration to CONTOSO domain</pre>
+
+<h4>SCENARIO 9: Quest Mailbox Migration Fails - MapiExceptionNotFound</h4>
+<pre>TICKET: "Quest Migration Manager fails when migrating mailbox for user
+         Sarah. Error: 'MapiExceptionNotFound' on the destination mailbox.
+         Other users in the same batch migrated fine."
+
+ROOT CAUSE: The target mailbox in Exchange Online doesn't exist yet, or the
+  mail-enabled user object in Entra ID doesn't have the right proxy addresses.
+  Quest tries to connect to the target mailbox and can't find it.
+
+TROUBLESHOOT:
+  1. Check if target mailbox exists
+     Connect-ExchangeOnline
+     Get-Mailbox sarah@contoso.com -ErrorAction SilentlyContinue
+     # If returns nothing: mailbox doesn't exist in Exchange Online
+
+     # Check if mail-enabled user exists:
+     Get-MailUser sarah@contoso.com -ErrorAction SilentlyContinue
+
+  2. Check Entra ID user
+     Get-MgUser -UserId sarah@contoso.com -Property UserPrincipalName, \`
+       ProxyAddresses, Mail | Select-Object *
+     # ProxyAddresses must include: SMTP:sarah@contoso.com
+
+  3. Check on-prem remote mailbox setup
+     # On on-prem Exchange:
+     Get-RemoteMailbox sarah@contoso.com | Select-Object \`
+       PrimarySmtpAddress, RemoteRoutingAddress, ExchangeGuid
+
+     # RemoteRoutingAddress must be: sarah@contoso.mail.onmicrosoft.com
+     # ExchangeGuid must NOT be all zeros
+
+  4. If mailbox doesn't exist - create it
+     # Option A: License the user in M365 (auto-creates mailbox)
+     # Option B: Enable remote mailbox on-prem:
+     Enable-RemoteMailbox -Identity sarah@contoso.com \`
+       -RemoteRoutingAddress sarah@contoso.mail.onmicrosoft.com
+
+     # Force sync to Entra ID:
+     Start-ADSyncSyncCycle -PolicyType Delta
+
+     # Wait for mailbox provisioning (up to 30 minutes)
+
+  5. Check proxy addresses match
+     # Source (on-prem):
+     Get-Mailbox sarah@corp.contoso.com | Select-Object -ExpandProperty EmailAddresses
+     # Target (cloud) must have the same SMTP addresses
+
+  6. Re-run Quest migration for this user
+     # In Quest Migration Manager, retry the failed user
+     # Or use New-MoveRequest if doing native Exchange migration
+
+AFTER FIX:
+  - Sarah's mailbox migration completes successfully
+  - Verify: mail flow works (send test email both ways)
+  - Verify: calendar, contacts, and rules migrated
+  - Check: Outlook connects to the new mailbox</pre>
 `
     }
   ]
@@ -6125,6 +7263,657 @@ STEP 3: Force HTTPS redirect (optional)
   - Not trusted? Root CA cert must be in Trusted Root store</pre>
 
 <div class="interview-tip">Interview tip: "I set up each web application in its own app pool for isolation, running under a service account with least privilege. For HTTPS, I request certificates from our internal CA and bind them in IIS with SNI enabled so multiple HTTPS sites can share port 443. I configure IIS recycling at a fixed time during off-hours rather than the default interval to avoid recycling during business hours."</div>
+`
+    },
+    {
+      id: 'ws-scenarios',
+      title: 'Break/Fix Scenarios - Server Down, Disk Full, Services Crashing, Network Issues',
+      content: `
+<h4>SCENARIO 1: Server Stuck on "Restarting" After Windows Update</h4>
+<pre>TICKET: "Production file server has been showing 'Restarting' for 2 hours
+         after last night's patch window. Users can't access files."
+
+ROOT CAUSE: A Windows Update failed during installation and the server is
+  stuck in a reboot loop trying to apply/roll back the update.
+
+TROUBLESHOOT:
+  1. Check if the server is actually stuck (not just slow)
+     # From another server, try to ping it:
+     Test-NetConnection FILE-SRV01 -Port 3389
+     # If port 3389 responds but RDP fails: server might be in safe mode
+     # If no response at all: server is truly hung
+
+  2. If VMware/Hyper-V: Open the VM console (not RDP)
+     VMware: vSphere Client > right-click VM > Open Console
+     Hyper-V: Hyper-V Manager > Connect
+     You'll see one of:
+       - "Configuring Windows Updates: x% complete" (let it finish)
+       - "Reverting changes" (also let it finish, can take 30+ minutes)
+       - Black screen with spinning dots (truly hung)
+       - Blue screen with stop code (BSOD)
+
+  3. If truly hung (no progress for 30+ minutes on console):
+     # Force power off (last resort):
+     VMware: Right-click VM > Power > Power Off
+     Hyper-V: Stop-VM -Name FILE-SRV01 -Force
+
+     # Boot into Safe Mode:
+     During boot, interrupt startup (hold Shift while restarting
+     or press F8 during boot)
+     Select: Safe Mode with Command Prompt
+
+  4. In Safe Mode: Remove the problematic update
+     # List recently installed updates
+     wmic qfe list brief /format:table
+     # Or:
+     Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 10
+
+     # Uninstall the bad update
+     wusa /uninstall /kb:5034441 /quiet /norestart
+     # Or:
+     DISM /Online /Remove-Package /PackageName:Package_for_KB5034441
+
+  5. If DISM can't fix it
+     # Run component store repair:
+     DISM /Online /Cleanup-Image /RestoreHealth
+     sfc /scannow
+
+  6. Reboot normally
+     Restart-Computer
+
+PREVENT THIS:
+  - Test patches on non-production servers first (test > pilot > prod)
+  - Take a VM snapshot BEFORE patching (revert if update fails)
+  - Schedule patch reboots during maintenance windows
+  - Use WSUS/SCCM to approve patches after testing
+
+AFTER FIX:
+  - Server boots normally, file shares accessible
+  - Check Event Viewer > Setup for update installation results
+  - Hide the problematic update until Microsoft releases a fix
+  - Delete VM snapshot after confirming stability (within 72 hours)</pre>
+
+<h4>SCENARIO 2: C: Drive Full on Domain Controller</h4>
+<pre>TICKET: "Domain controller alerts - C: drive is at 98%. AD replication
+         failing. Users in this site can't log in."
+
+ROOT CAUSE: SYSVOL, logs, or Windows Update cache consumed all disk space.
+  When a DC runs out of disk space, AD replication stops, DNS stops updating,
+  and authentication fails.
+
+TROUBLESHOOT:
+  1. Check what's consuming space (don't install TreeSize on a DC)
+     # PowerShell - find large directories:
+     Get-ChildItem C:\\ -Directory | ForEach-Object {
+       [PSCustomObject]@{
+         Folder = $_.FullName
+         SizeMB = [math]::Round((Get-ChildItem $_.FullName -Recurse -File -ErrorAction SilentlyContinue |
+           Measure-Object -Property Length -Sum).Sum / 1MB, 0)
+       }
+     } | Sort-Object SizeMB -Descending | Select-Object -First 15
+
+  2. Common space hogs on DCs:
+     C:\\Windows\\SoftwareDistribution   (Windows Update cache)
+     C:\\Windows\\Logs                   (CBS, DISM logs)
+     C:\\Windows\\NTDS                   (AD database + logs)
+     C:\\Windows\\SYSVOL                 (GPO files, scripts)
+     C:\\Windows\\Temp                   (temp files)
+     C:\\Windows\\WinSxS                 (component store - DO NOT delete manually)
+     C:\\inetpub\\logs                   (IIS logs if IIS is installed)
+
+  3. Safe cleanup actions:
+     # Clear Windows Update cache (safe, will re-download if needed)
+     Stop-Service wuauserv
+     Remove-Item "C:\\Windows\\SoftwareDistribution\\Download\\*" -Recurse -Force
+     Start-Service wuauserv
+
+     # Clear temp files
+     Remove-Item "C:\\Windows\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+     # Clean component store (safe, Microsoft supported)
+     DISM /Online /Cleanup-Image /StartComponentCleanup
+
+     # Disk Cleanup (run as admin)
+     cleanmgr /sageset:1   # Configure what to clean
+     cleanmgr /sagerun:1   # Run the cleanup
+
+     # Clear old event logs (export first!)
+     wevtutil el | ForEach-Object {
+       $size = (wevtutil gl $_) | Select-String "fileSize"
+       # Only clear large logs after exporting
+     }
+
+  4. If NTDS database is huge (shouldn't be unless millions of objects):
+     # Check AD database size:
+     dir "C:\\Windows\\NTDS\\ntds.dit"
+     # Normal: 100MB-2GB. If much larger: offline defrag needed
+     # This is advanced - consult Microsoft docs
+
+  5. Long-term fix: Extend the disk
+     # VMware: Edit VM settings > increase disk size
+     # Then in Windows: extend the partition
+     $maxSize = (Get-PartitionSupportedSize -DriveLetter C).SizeMax
+     Resize-Partition -DriveLetter C -Size $maxSize
+
+AFTER FIX:
+  - C: drive has > 20% free space
+  - AD replication resumes: repadmin /replsummary
+  - DNS updates working: check dynamic registrations
+  - Set up disk space monitoring alert (warn at 80%, critical at 90%)</pre>
+
+<h4>SCENARIO 3: RDP "An internal error has occurred" or Connection Refused</h4>
+<pre>TICKET: "Can't RDP into the application server. Was working yesterday.
+         Getting 'An internal error has occurred' or just times out."
+
+ROOT CAUSE: Could be many things: RDP service stopped, certificate issue,
+  NLA (Network Level Authentication) mismatch, firewall, or the server
+  ran out of available RDP sessions.
+
+TROUBLESHOOT:
+  1. Can you reach the server at all?
+     Test-NetConnection APP-SRV01 -Port 3389
+     # If port is open but RDP fails: service or auth issue
+     # If port is closed: firewall or service not running
+
+  2. Check remotely via PowerShell (if WinRM is working)
+     # Check RDP service
+     Invoke-Command -ComputerName APP-SRV01 -ScriptBlock {
+       Get-Service TermService | Select-Object Status
+       # Also check the RDP listener:
+       Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" \`
+         -Name fDenyTSConnections
+       # 0 = RDP allowed, 1 = RDP denied
+     }
+
+  3. If fDenyTSConnections = 1 (RDP disabled):
+     Invoke-Command -ComputerName APP-SRV01 -ScriptBlock {
+       Set-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" \`
+         -Name fDenyTSConnections -Value 0
+       Restart-Service TermService
+     }
+
+  4. Check for maxed out sessions
+     # RDP allows 2 admin sessions by default
+     Invoke-Command -ComputerName APP-SRV01 -ScriptBlock {
+       quser   # Shows who is logged in
+       query session   # Shows all sessions including disconnected
+     }
+     # If 2 sessions are active: log off a disconnected session
+     Invoke-Command -ComputerName APP-SRV01 -ScriptBlock {
+       logoff 3   # Log off session ID 3 (get ID from quser)
+     }
+
+  5. "Internal error" specifically:
+     # Usually a certificate or TLS issue
+     Invoke-Command -ComputerName APP-SRV01 -ScriptBlock {
+       # Delete the self-signed RDP certificate (it regenerates on restart)
+       $thumbprint = (Get-WmiObject -Class "Win32_TSGeneralSetting" \`
+         -Namespace root\\cimv2\\terminalservices).SSLCertificateSHA1Hash
+       Remove-Item "Cert:\\LocalMachine\\Remote Desktop\\$thumbprint" -ErrorAction SilentlyContinue
+       Restart-Service TermService
+     }
+
+  6. If nothing works: Use the VM console
+     VMware/Hyper-V console doesn't use RDP - it's direct console access
+     From there, troubleshoot locally
+
+AFTER FIX:
+  - RDP connection works
+  - Set GPO to limit disconnected sessions to 1 hour auto-logoff
+  - Set GPO for idle session timeout (prevents "no sessions available")
+  - Consider using Azure Bastion or Windows Admin Center as alternatives</pre>
+
+<h4>SCENARIO 4: DNS Not Resolving Intermittently</h4>
+<pre>TICKET: "Users randomly can't access websites or internal apps. Some users
+         are fine, some aren't. nslookup works but ping by hostname fails.
+         Rebooting the PC fixes it temporarily."
+
+ROOT CAUSE: DNS client cache poisoned, stale DNS records, or one of multiple
+  DNS servers has a problem. When the client randomly picks the bad DNS server,
+  resolution fails.
+
+TROUBLESHOOT:
+  1. Check what DNS servers the client is using
+     Get-DnsClientServerAddress -InterfaceAlias "Ethernet" |
+       Select-Object ServerAddresses
+
+  2. Test each DNS server individually
+     Resolve-DnsName -Name intranet.contoso.com -Server 10.0.1.10
+     Resolve-DnsName -Name intranet.contoso.com -Server 10.0.1.11
+     # If one fails: that DNS server has the problem
+
+  3. Check DNS cache on the client
+     Get-DnsClientCache | Where-Object Entry -like "*intranet*"
+     # If showing wrong IP: cache is stale
+     Clear-DnsClientCache
+
+  4. Check the DNS server itself
+     Invoke-Command -ComputerName DC01 -ScriptBlock {
+       # Is DNS service running?
+       Get-Service DNS
+       # Check for errors
+       Get-WinEvent -FilterHashtable @{LogName='DNS Server'; Level=2} -MaxEvents 10
+       # Test DNS resolution on the server itself
+       Resolve-DnsName -Name intranet.contoso.com -Server localhost
+     }
+
+  5. Check for stale DNS records
+     # Look for old/incorrect A records:
+     Get-DnsServerResourceRecord -ZoneName "contoso.com" -Name "intranet" \`
+       -ComputerName DC01
+     # If there are multiple A records with different IPs: round-robin
+     # causing users to hit a dead IP
+
+     # Remove stale records:
+     Remove-DnsServerResourceRecord -ZoneName "contoso.com" \`
+       -Name "intranet" -RRType A -RecordData "10.0.1.99" \`
+       -ComputerName DC01
+
+  6. Check scavenging (automatic cleanup of stale records)
+     Get-DnsServerScavenging -ComputerName DC01
+     # If not enabled: old records never get cleaned up
+     Set-DnsServerScavenging -ComputerName DC01 -ScavengingState $true \`
+       -RefreshInterval 7.00:00:00 -NoRefreshInterval 7.00:00:00
+
+AFTER FIX:
+  - All users can resolve DNS consistently
+  - Enable DNS scavenging to prevent future stale records
+  - Monitor DNS server health
+  - Consider setting up DNS logging for troubleshooting</pre>
+
+<h4>SCENARIO 5: Print Spooler Crashes Repeatedly</h4>
+<pre>TICKET: "Print server keeps going down. Users can't print for 5-10 minutes
+         at a time. Happens 3-4 times a day. Spooler service crashes and restarts."
+
+ROOT CAUSE: A bad print driver is crashing the spooler process (spoolsv.exe).
+  One faulty driver takes down ALL printers on the server because they share
+  the spooler process.
+
+TROUBLESHOOT:
+  1. Check spooler service status and crash pattern
+     Get-WinEvent -FilterHashtable @{
+       LogName = 'System'
+       ProviderName = 'Service Control Manager'
+     } -MaxEvents 20 | Where-Object Message -like "*Spooler*" |
+       Select-Object TimeCreated, Message
+
+  2. Check for the crash dump
+     # Event Viewer > Application > Source: "Application Error"
+     # Faulting module name tells you which driver crashed:
+     Get-WinEvent -FilterHashtable @{
+       LogName = 'Application'
+       ProviderName = 'Application Error'
+     } -MaxEvents 10 | Where-Object Message -like "*spoolsv*" |
+       Select-Object TimeCreated, Message
+
+  3. Identify the bad driver
+     # List all installed printer drivers:
+     Get-PrinterDriver | Select-Object Name, PrinterEnvironment, MajorVersion
+
+     # Look for: Non-Microsoft drivers, old drivers, recently added drivers
+     # The crash dump usually names the faulting DLL - match it to a driver
+
+  4. Fix: Replace the bad driver
+     # Remove the problematic driver:
+     Remove-PrinterDriver -Name "HP LaserJet 4000 Series PCL 5"
+     # Install the universal/generic driver instead:
+     Add-PrinterDriver -Name "HP Universal Printing PCL 6"
+     # Update all printers using the old driver:
+     Get-Printer | Where-Object DriverName -eq "HP LaserJet 4000 Series PCL 5" |
+       ForEach-Object { Set-Printer -Name $_.Name -DriverName "HP Universal Printing PCL 6" }
+
+  5. Emergency: Clear the print queue if it's jammed
+     Stop-Service Spooler
+     Remove-Item "C:\\Windows\\System32\\spool\\PRINTERS\\*" -Force
+     Start-Service Spooler
+
+  6. Prevention: Enable driver isolation
+     # Isolated drivers run in separate processes - one crash doesn't kill all
+     # In Print Management > Drivers > right-click driver > Set Driver Isolation
+     # Set to: Isolated (own process) for problematic drivers
+     Set-PrinterDriver -Name "HP Universal Printing PCL 6" -IsolationMode Isolated
+
+AFTER FIX:
+  - Spooler stays running without crashes
+  - All printers functional
+  - Enable driver isolation for all third-party drivers
+  - Use universal print drivers whenever possible
+  - Monitor Event Viewer for spooler crashes going forward</pre>
+
+<h4>SCENARIO 6: NTP/Time Sync Off - Kerberos Authentication Failing</h4>
+<pre>TICKET: "Users at the branch office can't log in. Getting 'clock skew too
+         great' Kerberos error. Their clocks show 6 minutes ahead."
+
+ROOT CAUSE: Kerberos requires clocks to be within 5 minutes of each other.
+  The branch office DC's time drifted because it's syncing to a wrong source
+  (or not syncing at all). All machines in that site sync to that DC.
+
+TROUBLESHOOT:
+  1. Check time on the affected machines
+     Invoke-Command -ComputerName BRANCH-DC01 -ScriptBlock {
+       Get-Date
+       w32tm /query /status
+       w32tm /query /source
+     }
+     # Compare with a known-good DC
+
+  2. Understand the time sync hierarchy
+     PDC Emulator (forest root) syncs to external NTP source
+       -> All other DCs sync to PDC Emulator
+         -> All domain members sync to their authenticating DC
+
+  3. Check who is the PDC Emulator
+     Get-ADDomain | Select-Object PDCEmulator
+     # The PDC Emulator MUST sync to an external time source
+
+  4. Fix the PDC Emulator (if it's the problem)
+     # Configure PDC to sync to external NTP:
+     w32tm /config /manualpeerlist:"time.windows.com,0x9" \`
+       /syncfromflags:manual /reliable:yes /update
+     Restart-Service w32time
+     w32tm /resync
+
+  5. Fix the branch DC
+     # Force it to sync from the PDC:
+     Invoke-Command -ComputerName BRANCH-DC01 -ScriptBlock {
+       w32tm /config /syncfromflags:domhier /update
+       Restart-Service w32time
+       w32tm /resync /rediscover
+     }
+
+  6. Fix client machines
+     # Force time resync:
+     w32tm /resync
+     # Or restart the time service:
+     Restart-Service w32time
+
+  7. Verify
+     w32tm /query /status
+     # Should show: Source: PDC-DC01.contoso.com (for other DCs)
+     #              Stratum: 3 or lower
+
+KERBEROS CONTEXT:
+  Default max clock skew: 5 minutes
+  If clocks are off by > 5 minutes:
+    - Kerberos tickets are rejected
+    - Users can't log in, access file shares, or use any Kerberos service
+    - NTLM may still work (it doesn't check time) but many services require Kerberos
+
+AFTER FIX:
+  - All clocks within 1-2 seconds of each other
+  - Users at branch office can log in
+  - Monitor time sync status on all DCs
+  - Set up alerting for time drift > 2 minutes</pre>
+
+<h4>SCENARIO 7: Server Blue Screen (BSOD) - WHEA/Memory Error</h4>
+<pre>TICKET: "Production SQL server crashed with a blue screen overnight.
+         It rebooted automatically but we don't know why.
+         Happened twice this month."
+
+ROOT CAUSE: Hardware failure - usually memory (WHEA_UNCORRECTABLE_ERROR),
+  failing disk, or driver issue. Needs investigation before it happens again.
+
+TROUBLESHOOT:
+  1. Check for the BSOD stop code
+     # Event Viewer > System > Source: BugCheck
+     Get-WinEvent -FilterHashtable @{
+       LogName = 'System'
+       Id = 1001
+       ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting'
+     } -MaxEvents 5 | Select-Object TimeCreated, Message
+
+     # Common stop codes:
+     0x124 = WHEA_UNCORRECTABLE_ERROR (hardware, usually memory or CPU)
+     0x50  = PAGE_FAULT_IN_NONPAGED_AREA (bad memory or driver)
+     0x1A  = MEMORY_MANAGEMENT (memory issue)
+     0xD1  = DRIVER_IRQL_NOT_LESS_OR_EQUAL (bad driver)
+     0x9F  = DRIVER_POWER_STATE_FAILURE (power management driver)
+
+  2. Check memory dump
+     # Location: C:\\Windows\\MEMORY.DMP or C:\\Windows\\Minidump\\
+     dir C:\\Windows\\Minidump
+     # Analyze with WinDbg or send to Microsoft for analysis
+
+  3. Check hardware health
+     # Check memory (Windows Memory Diagnostic):
+     mdsched.exe   # Schedules a memory test on next reboot
+
+     # Check disk health:
+     Get-PhysicalDisk | Select-Object FriendlyName, HealthStatus, OperationalStatus
+     Get-WinEvent -FilterHashtable @{LogName='System'; Id=7,11,15,51} -MaxEvents 20
+     # Event 7/11 = disk errors
+     # Event 51 = paging error (disk failing)
+
+  4. Check if it's a driver issue
+     # Recently installed drivers:
+     Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='*Driver*'} -MaxEvents 20
+     # Check driver dates:
+     driverquery /v | findstr /i "2024"
+
+  5. If VMware: Check ESXi host logs
+     Hardware issues on the host affect all VMs
+     Check: ESXi hardware health, vMotion history (did VM move to a bad host?)
+
+  6. Immediate action for production SQL:
+     # Verify SQL databases are consistent after crash:
+     DBCC CHECKDB   # Run on all databases
+     # Check SQL error logs:
+     Get-SqlErrorLog -ServerInstance "SQL-SRV01" -Since (Get-Date).AddDays(-1)
+
+AFTER FIX:
+  - Identify root cause (hardware vs driver vs OS)
+  - Replace failing hardware (memory DIMM, disk)
+  - Update drivers if driver-related
+  - If recurring: schedule hardware replacement during maintenance window
+  - Enable automatic memory dump collection
+  - Monitor hardware health via SCOM, iLO/iDRAC, or vendor management tools</pre>
+
+<h4>SCENARIO 8: Windows Service Won't Start - "Error 1069: Logon Failure"</h4>
+<pre>TICKET: "SQL Server Agent service won't start after we changed the service
+         account password. Error 1069: The service did not start due to a
+         logon failure."
+
+ROOT CAUSE: The service account password was changed in AD but not updated
+  in the Windows service configuration. The service tries to log on with the
+  old password and fails.
+
+TROUBLESHOOT:
+  1. Confirm the error
+     Get-Service SQLSERVERAGENT | Select-Object Status, StartType
+     # Status: Stopped
+     # Check Event Viewer:
+     Get-WinEvent -FilterHashtable @{
+       LogName = 'System'
+       Id = 7038    # Service logon failure
+     } -MaxEvents 5 | Select-Object TimeCreated, Message
+
+  2. Check which account the service uses
+     Get-WmiObject Win32_Service | Where-Object Name -eq "SQLSERVERAGENT" |
+       Select-Object Name, StartName, State
+     # StartName = CONTOSO\\svc_sqlagent
+
+  3. Verify the account in AD
+     Get-ADUser -Identity svc_sqlagent -Properties \`
+       LockedOut, PasswordExpired, PasswordLastSet, Enabled
+     # LockedOut = True? Unlock it first
+     # PasswordExpired = True? Password policy forced a change
+     # Enabled = False? Someone disabled it
+
+  4. Unlock if locked out
+     Unlock-ADAccount -Identity svc_sqlagent
+
+  5. Update the service with the new password
+     # Option A: Services MMC (services.msc)
+     # Right-click service > Properties > Log On tab > enter new password
+
+     # Option B: PowerShell
+     $cred = Get-Credential CONTOSO\\svc_sqlagent
+     sc.exe config SQLSERVERAGENT obj= "CONTOSO\\svc_sqlagent" password= "newpassword"
+
+     # Option C: For SQL specifically, use SQL Server Configuration Manager
+     # This is the BEST method for SQL services because it also updates
+     # internal SQL permissions
+
+  6. Start the service
+     Start-Service SQLSERVERAGENT
+     Get-Service SQLSERVERAGENT   # Verify: Running
+
+PREVENT THIS:
+  - Use Group Managed Service Accounts (gMSA) - AD manages the password automatically
+    # Create gMSA:
+    New-ADServiceAccount -Name "gMSA_SQL" -DNSHostName "gMSA_SQL.contoso.com" \`
+      -PrincipalsAllowedToRetrieveManagedPassword "SQL-Servers-Group"
+    # Install on server:
+    Install-ADServiceAccount -Identity "gMSA_SQL"
+    # Set service to use: CONTOSO\\gMSA_SQL$ (note the $ suffix)
+    # No password needed - AD rotates it automatically every 30 days
+
+  - If gMSA not possible: Document all service accounts and their services
+  - Use CyberArk or similar PAM tool to manage service account passwords
+
+AFTER FIX:
+  - SQL Server Agent service is running
+  - SQL Agent jobs are executing on schedule
+  - Plan migration to gMSA for all service accounts
+  - Update the service account documentation</pre>
+
+<h4>SCENARIO 9: Cluster Node Won't Rejoin After Maintenance</h4>
+<pre>TICKET: "Patched Node 2 of the SQL cluster last night. After reboot, it
+         won't rejoin the cluster. Node shows as 'Down' in Failover Cluster
+         Manager. SQL is running on Node 1 but we have no redundancy."
+
+ROOT CAUSE: The Windows Update changed a network driver or configuration that
+  broke the cluster heartbeat network. Or the cluster service can't start because
+  of a quorum issue or time skew.
+
+TROUBLESHOOT:
+  1. Check cluster node status from the working node
+     Get-ClusterNode
+     # Node2: Down
+
+  2. RDP/console into Node 2 and check cluster service
+     Get-Service ClusSvc | Select-Object Status, StartType
+     # If stopped, check why:
+     Get-WinEvent -FilterHashtable @{
+       LogName = 'System'
+       ProviderName = 'Microsoft-Windows-FailoverClustering'
+     } -MaxEvents 20 | Select-Object TimeCreated, Id, Message
+
+  3. Common issues and fixes:
+     NETWORK:
+       # Check if heartbeat NIC is up:
+       Get-NetAdapter | Select-Object Name, Status, LinkSpeed
+       # If down: Enable-NetAdapter -Name "Heartbeat"
+       # Check IP:
+       Get-NetIPAddress -InterfaceAlias "Heartbeat"
+       # Ping the other node's heartbeat IP
+       Test-NetConnection 10.0.99.2 -Port 3343   # Cluster port
+
+     TIME SKEW:
+       # If clocks are off > 5 minutes:
+       w32tm /resync
+       # Then restart cluster service
+
+     QUORUM:
+       # Check quorum status:
+       Get-ClusterQuorum
+       # If witness is down and one node is down = no quorum
+       # Fix witness first, then bring node back
+
+     STORAGE:
+       # If shared storage is inaccessible:
+       Get-ClusterSharedVolume
+       Get-Disk | Where-Object BusType -eq "iSCSI"
+       # Reconnect iSCSI if needed
+
+  4. Start the cluster service
+     Start-Service ClusSvc
+     # If it fails, try with force:
+     Start-ClusterNode -Name Node2 -FixQuorum
+
+  5. Verify node rejoined
+     Get-ClusterNode
+     # Node2: Up
+     Get-ClusterGroup   # Check roles can fail back
+
+  6. Test failover (optional but recommended)
+     Move-ClusterGroup -Name "SQL Server" -Node Node2
+     # Verify SQL works on Node 2
+     Move-ClusterGroup -Name "SQL Server" -Node Node1
+     # Move back to preferred node
+
+AFTER FIX:
+  - Both nodes show "Up" in cluster
+  - Test failover works both directions
+  - Review what the update changed (driver, network config)
+  - Document: Cluster maintenance procedure (drain before patch, verify after)
+  - Next time: Suspend-ClusterNode -Drain before patching</pre>
+
+<h4>SCENARIO 10: Certificate Expired - Internal Website Shows "Not Secure"</h4>
+<pre>TICKET: "The company intranet shows 'Your connection is not private' in Chrome.
+         ERR_CERT_DATE_INVALID. Users are scared to click through."
+
+ROOT CAUSE: The SSL/TLS certificate on the IIS web server expired. Internal
+  certificates from AD CS have a default validity of 1-2 years and need renewal.
+
+TROUBLESHOOT:
+  1. Check the certificate
+     # On the web server:
+     Get-ChildItem Cert:\\LocalMachine\\My |
+       Where-Object { $_.NotAfter -lt (Get-Date) } |
+       Select-Object Subject, NotAfter, Thumbprint
+
+     # Or check remotely:
+     $url = "https://intranet.contoso.com"
+     $request = [System.Net.HttpWebRequest]::Create($url)
+     $request.GetResponse() | Out-Null
+     $cert = $request.ServicePoint.Certificate
+     $cert.GetExpirationDateString()
+
+  2. Request a new certificate from internal CA
+     # If auto-enrollment is working:
+     certutil -pulse   # Force auto-enrollment check
+
+     # If manual request needed:
+     # Open certlm.msc > Personal > Certificates
+     # Right-click > Request New Certificate > Web Server template
+     # Fill in CN=intranet.contoso.com
+     # Add SANs if needed: intranet, intranet.contoso.com
+
+  3. Bind the new certificate in IIS
+     $newThumb = (Get-ChildItem Cert:\\LocalMachine\\My |
+       Where-Object { $_.Subject -like "*intranet*" -and $_.NotAfter -gt (Get-Date) }).Thumbprint
+
+     # Remove old binding and add new:
+     Remove-WebBinding -Name "IntranetApp" -Protocol https
+     New-WebBinding -Name "IntranetApp" -Protocol https -Port 443 \`
+       -HostHeader "intranet.contoso.com" -SslFlags 1
+     (Get-WebBinding -Name "IntranetApp" -Protocol https).AddSslCertificate($newThumb, "My")
+
+  4. Restart the site
+     Restart-WebItem "IIS:\\Sites\\IntranetApp"
+
+  5. Verify
+     # Test from your machine:
+     Invoke-WebRequest -Uri "https://intranet.contoso.com" -UseBasicParsing |
+       Select-Object StatusCode
+     # Should return 200
+
+PREVENT THIS:
+  - Enable auto-enrollment for web server certificates via GPO
+  - Set up certificate expiry monitoring:
+    # Script to check all certs expiring within 30 days:
+    Get-ChildItem Cert:\\LocalMachine\\My |
+      Where-Object { $_.NotAfter -lt (Get-Date).AddDays(30) -and $_.NotAfter -gt (Get-Date) } |
+      Select-Object Subject, NotAfter
+  - Create a shared calendar with cert expiry dates
+  - Use Azure Key Vault or ACME for automated renewal where possible
+
+AFTER FIX:
+  - Intranet loads without certificate warnings
+  - New certificate valid for 1-2 years
+  - Add expiry date to monitoring dashboard
+  - Check all other internal certificates for upcoming expiry</pre>
 `
     }
   ]
